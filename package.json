@@ -1,7 +1,31 @@
 {
-  "name": "my-project",
-  "private": true,
-  "devDependencies": {
-    "knip": "^6.45.1"
-  }
+    "name": "patchbay",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc --noEmit && vite build",
+        "tauri": "tauri"
+    },
+    "dependencies": {
+        "@tauri-apps/api": "^2.12.5",
+        "lucide-react": "^1.79.0",
+        "radix-ui": "^1.8.1",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.65.1",
+        "@tailwindcss/vite": "^4.3.5",
+        "@tauri-apps/cli": "^2.12.6",
+        "@types/node": "^26.6.6",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "@vitejs/plugin-react": "^6.3.0",
+        "knip": "^6.45.1",
+        "tailwindcss": "^4.3.5",
+        "typescript": "^7.0.2",
+        "vite": "^8.3.8"
+    }
 }

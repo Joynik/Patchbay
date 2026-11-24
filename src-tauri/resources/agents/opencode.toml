@@ -1,0 +1,7 @@
+id = "opencode"
+name = "OpenCode"
+adapter = "opencode"
+
+[[paths.macos]]
+root = "$CONFIG"
+folder = "opencode"

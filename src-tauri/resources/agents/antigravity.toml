@@ -1,0 +1,11 @@
+id = "antigravity"
+name = "Antigravity"
+adapter = "antigravity"
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".gemini/config"
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".gemini/antigravity"

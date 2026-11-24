@@ -1,0 +1,11 @@
+id = "codex"
+name = "Codex"
+adapter = "codex"
+
+[[paths.macos]]
+root = "$ENV:CODEX_HOME"
+folder = "."
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".codex"

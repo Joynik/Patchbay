@@ -1,0 +1,11 @@
+id = "pi"
+name = "Pi"
+adapter = "pi"
+
+[[paths.macos]]
+root = "$ENV:PI_CODING_AGENT_DIR"
+folder = "."
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".pi/agent"

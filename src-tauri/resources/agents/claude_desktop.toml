@@ -1,0 +1,7 @@
+id = "claude_desktop"
+name = "Claude Desktop"
+adapter = "claude_desktop"
+
+[[paths.macos]]
+root = "$APP_SUPPORT"
+folder = "Claude"

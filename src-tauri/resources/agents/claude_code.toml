@@ -1,0 +1,11 @@
+id = "claude_code"
+name = "Claude Code"
+adapter = "claude_code"
+
+[[paths.macos]]
+root = "$ENV:CLAUDE_CONFIG_DIR"
+folder = "."
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".claude"

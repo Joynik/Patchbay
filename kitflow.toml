@@ -4,7 +4,7 @@ box_version = 11
 
 [selection]
 components = ["javascript", "typescript", "rust", "knip", "cargo-machete", "bun", "vite", "rumdl", "react", "tauri", "bun-tests", "rust-tests", "env-example", "agents"]
-excluded = []
+excluded = ["task.build", "task.build-release", "task.frontend:preview", "task.test", "task.test:doc"]
 
 [state]
 seeded_mise_keys = [["env", "JAVASCRIPT_BUILD_SCRIPT"], ["env", "PROJECT_JAVASCRIPT_DIRECTORY"], ["env", "PROJECT_RUST_DIRECTORY"], ["env", "_", "file"], ["settings", "task", "quiet"], ["settings", "task", "run_auto_install"], ["vars", "javascript_build_script"], ["vars", "javascript_directory"], ["vars", "rust_directory"]]

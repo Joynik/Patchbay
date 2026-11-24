@@ -64,4 +64,5 @@ src-tauri/gen/
 # Rules here are preserved during KitFlow updates.
 # Rules in the kitflow block are replaced automatically during updates.
 /ARCHITECTURE.md
+/test-results/
 # </user>
