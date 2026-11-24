@@ -1,6 +1,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
 use std::{
+    fmt::Write as _,
     fs,
     io::{ErrorKind, Write},
     path::Path,
@@ -43,5 +44,10 @@ pub fn atomic_write(path: &Path, content: &str) -> Result<(), String> {
 }
 
 pub fn fingerprint(value: &serde_json::Value) -> String {
-    format!("{:x}", Sha256::digest(value.to_string()))
+    let digest = Sha256::digest(value.to_string());
+    let mut fingerprint = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        write!(fingerprint, "{byte:02x}").expect("writing to a String cannot fail");
+    }
+    fingerprint
 }
