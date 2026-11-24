@@ -1,0 +1,7 @@
+{
+  "name": "my-project",
+  "private": true,
+  "devDependencies": {
+    "knip": "^6.45.1"
+  }
+}

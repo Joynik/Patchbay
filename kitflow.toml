@@ -1,0 +1,321 @@
+schema = 1
+migrated_box_version = 1
+box_version = 11
+
+[selection]
+components = ["javascript", "typescript", "rust", "sqlite", "knip", "cargo-machete", "bun", "vite", "rumdl", "react", "tauri", "bun-tests", "rust-tests", "env-example", "agents"]
+excluded = []
+
+[state]
+seeded_mise_keys = [["env", "DATABASE_BACKUP_FILE"], ["env", "DATABASE_EXECUTION_MODE"], ["env", "DATABASE_RESTORE_FILE"], ["env", "JAVASCRIPT_BUILD_SCRIPT"], ["env", "PROJECT_JAVASCRIPT_DIRECTORY"], ["env", "PROJECT_RUST_DIRECTORY"], ["env", "SQLITE_DATABASE_PATH"], ["env", "SQLITE_INIT_SQL"], ["env", "SQLITE_MODE"], ["env", "SQLITE_REMOTE_AUTH_TOKEN"], ["env", "SQLITE_REMOTE_URL"], ["env", "_", "file"], ["settings", "task", "quiet"], ["settings", "task", "run_auto_install"], ["vars", "database_backup_file"], ["vars", "database_execution_mode"], ["vars", "database_restore_file"], ["vars", "javascript_build_script"], ["vars", "javascript_directory"], ["vars", "rust_directory"], ["vars", "sqlite_database_path"], ["vars", "sqlite_init_sql"], ["vars", "sqlite_mode"], ["vars", "sqlite_remote_auth_token"], ["vars", "sqlite_remote_url"]]
+
+[state.artifacts.readme]
+path = "README.md"
+kind = "file"
+key = ""
+sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+once = true
+
+[state.artifacts.project]
+path = "PROJECT.md"
+kind = "file"
+key = ""
+sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+once = true
+
+[state.artifacts.gitignore]
+path = ".gitignore"
+kind = "block"
+key = ""
+sha256 = "cdaebdcb213002cd8a010920ca188bf597a02f037aae75578eba183bad266fad"
+once = false
+
+[state.artifacts.env-example]
+path = ".env.example"
+kind = "file"
+key = ""
+sha256 = "4972a65f47733dba47adc618c9fc45e7f106912d22a3f304e588009a92828289"
+once = false
+
+[state.artifacts.bunfig]
+path = "bunfig.toml"
+kind = "file"
+key = ""
+sha256 = "d4f78d696efdc9be5083b7aa6091e7333118070ac494902e1663d7ffccc9dc16"
+once = false
+
+[state.artifacts.javascript-manifest]
+path = "package.json"
+kind = "file"
+key = ""
+sha256 = "dd0d385bd038520768a147b6eff67477e1b0cdf28a133c937999e27c50ca9da0"
+once = true
+
+[state.artifacts.tauri-rust-manifest]
+path = "src-tauri/Cargo.toml"
+kind = "file"
+key = ""
+sha256 = "fb46936a69fd755cb81d14ec1b62432555b16efdd1ffb52d688300fd4c8c7f10"
+once = true
+
+[state.artifacts.knip-config]
+path = "knip.json"
+kind = "file"
+key = ""
+sha256 = "38fba668fd656a3ae5d3ce337253dc4e09310ee7ed559ef4a805b1aed12c675f"
+once = true
+
+[state.artifacts.rustfmt]
+path = "rustfmt.toml"
+kind = "file"
+key = ""
+sha256 = "74b25fffb5e6e5f5b305855ba249adf5d46733c173ac1ccec7645b3a537a5c6b"
+once = false
+
+[state.artifacts.rumdl]
+path = "rumdl.toml"
+kind = "file"
+key = ""
+sha256 = "888f8bdfdf27050d9bfe2a47051708241b890406eda949eebdbda64b9c193c33"
+once = false
+
+[state.artifacts.agents]
+path = "AGENTS.md"
+kind = "file"
+key = ""
+sha256 = "e9308b50035fe9733fe3d5a63c2cfac5df1ffb38731a4e18d3a90cbbfc41a87b"
+once = false
+
+[state.artifacts.standards]
+path = "STANDARDS.md"
+kind = "file"
+key = ""
+sha256 = "3d48c5a1a5ac072836259a6deee59dcbe2fea667daaae91cf430c717f4af3bfc"
+once = false
+
+[state.artifacts.tools]
+path = "TOOLS.md"
+kind = "file"
+key = ""
+sha256 = "dfe90a5ac98e0f9a7bbc0d07eef0a1f78d737bb93a725bc4098f8a0ab9a5b9bc"
+once = false
+
+[state.artifacts."defaults.base"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "e946f35079fa51475f0281e8a576732db2082e566d23ea941198e865345f19e1"
+once = true
+
+[state.artifacts."defaults.javascript"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "5d8f33968c725d1c6d87a48f35bd5080f6672be1f5cc3b3b61bc1f0474e759ba"
+once = true
+
+[state.artifacts."defaults.rust-tauri"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "177ba76ecf00065388067e389cba6cdf031fec69fe1a631f232f323397915365"
+once = true
+
+[state.artifacts."defaults.rust"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "487002dbbefe3268b746436320dc57d25590939f7267b132007d6016b62cb134"
+once = true
+
+[state.artifacts."defaults.javascript-build"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "2838618a01a64ffa6c535e9b43813cf9d582fd860de0478308595c363d5afd56"
+once = true
+
+[state.artifacts."defaults.database"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "76be13fcdc33969835db612062770e57ccc4edc8e97e8018949ef2e5a42bf3aa"
+once = true
+
+[state.artifacts."defaults.sqlite"]
+path = "mise.toml"
+kind = "defaults"
+key = ""
+sha256 = "54341d92c2cccc45a9da5f5b8aa968c734b1250e67f047c9342f3df47c45f6e1"
+once = true
+
+[state.artifacts."task.help"]
+path = "mise.toml"
+kind = "task"
+key = "help"
+sha256 = "5a976415c57aa16ecef2ca94edfaebdb201a17d2c0a86f439a735bf7f112ecc8"
+once = false
+
+[state.artifacts."task.env:local"]
+path = "mise.toml"
+kind = "task"
+key = "env:local"
+sha256 = "bb3be6a1ff16beca762a86612a74a11adb3dd66e084c7b791cdc776c2b97a7e7"
+once = false
+
+[state.artifacts."task.check"]
+path = "mise.toml"
+kind = "task"
+key = "check"
+sha256 = "81ecc3692523cf5b52bec708e823ccffcd67832629127575ee96cc7eef03d275"
+once = false
+
+[state.artifacts."task.verify"]
+path = "mise.toml"
+kind = "task"
+key = "verify"
+sha256 = "f08e1f82cadea6080381bde71846793ee4aa644d31d0ee70865646317873362b"
+once = false
+
+[state.artifacts."task.lint"]
+path = "mise.toml"
+kind = "task"
+key = "lint"
+sha256 = "fff6958406bd87dbcefc40f60c75ae50077f3f1c13b25821cbed3de60da04b26"
+once = false
+
+[state.artifacts."task.check-unused"]
+path = "mise.toml"
+kind = "task"
+key = "check-unused"
+sha256 = "fe9c342f8ad78b2588241f13aa4684e4ff1ed1e155bfa81891213340a217dfce"
+once = false
+
+[state.artifacts."task.check-deps"]
+path = "mise.toml"
+kind = "task"
+key = "check-deps"
+sha256 = "313c62c821a9c427d1d56ee5b132f980f93cbba77c11ea763ddf2da2d171e93c"
+once = false
+
+[state.artifacts."task.install-cargo-machete"]
+path = "mise.toml"
+kind = "task"
+key = "install-cargo-machete"
+sha256 = "399c27c977e7e90e51376b3b464e9ffc6d5f1364ad1a4706adae520f5d338a1e"
+once = false
+
+[state.artifacts."task.lint-fix"]
+path = "mise.toml"
+kind = "task"
+key = "lint-fix"
+sha256 = "36fa7a7af9aa90ab76ede6d1fad937ca2dc840eb2a82d006a344c7d858c0c268"
+once = false
+
+[state.artifacts."task.format"]
+path = "mise.toml"
+kind = "task"
+key = "format"
+sha256 = "6ab40f4d810a4ab4459fe8d14d409e7fcf99a4543a3fab8bba04ae83e2a34784"
+once = false
+
+[state.artifacts."task.format-check"]
+path = "mise.toml"
+kind = "task"
+key = "format-check"
+sha256 = "c3989086a227bc9f662c477597beeda233bdec32d49685174bf6a30ea528cce5"
+once = false
+
+[state.artifacts."task.typecheck"]
+path = "mise.toml"
+kind = "task"
+key = "typecheck"
+sha256 = "c30a42c3884f2b8175edce668f37508b17c58658aabedfeef6d6cadb08713fd0"
+once = false
+
+[state.artifacts."task.test"]
+path = "mise.toml"
+kind = "task"
+key = "test"
+sha256 = "e937868c431f2440fe1f220888a10b09535be12a42731ee20a449a0546f10da7"
+once = false
+
+[state.artifacts."task.test:doc"]
+path = "mise.toml"
+kind = "task"
+key = "test:doc"
+sha256 = "1f1789fb8499579a21b934887e95104de8cf89ea41a56f8d6438691e587c0f3c"
+once = false
+
+[state.artifacts."task.build"]
+path = "mise.toml"
+kind = "task"
+key = "build"
+sha256 = "82bfc482126b1dcb4e8749a440ea32ad4207be503afae652a8017097d9c7834e"
+once = false
+
+[state.artifacts."task.build-release"]
+path = "mise.toml"
+kind = "task"
+key = "build-release"
+sha256 = "bf4219ca7f4426ee9284e97762efd06ad4f7176387ed5e6297d59612c8a72022"
+once = false
+
+[state.artifacts."task.app:build"]
+path = "mise.toml"
+kind = "task"
+key = "app:build"
+sha256 = "42fa52763d8ed05731c487fb29935b58f80920dbac05f426852ce8719552976b"
+once = false
+
+[state.artifacts."task.frontend:dev"]
+path = "mise.toml"
+kind = "task"
+key = "frontend:dev"
+sha256 = "def7fd6a9ce7c959c77c06af0374174c517661ce068a72836d8dd0704468fe4c"
+once = false
+
+[state.artifacts."task.frontend:build"]
+path = "mise.toml"
+kind = "task"
+key = "frontend:build"
+sha256 = "1a970ecc12956d282cdbf0c4d617ead464c1b9829806fa763962d63fb3b23be2"
+once = false
+
+[state.artifacts."task.frontend:preview"]
+path = "mise.toml"
+kind = "task"
+key = "frontend:preview"
+sha256 = "64f3fd97df3dcd02e50a3cec1ac892974d74fde6a2047b30c99a91258a16c713"
+once = false
+
+[state.artifacts."task.start"]
+path = "mise.toml"
+kind = "task"
+key = "start"
+sha256 = "d469813bd6074c31413795eaf2c1a4748c041f02837ba4fbec036d752bdf35e5"
+once = false
+
+[state.artifacts."task.db:prepare"]
+path = "mise.toml"
+kind = "task"
+key = "db:prepare"
+sha256 = "34294a32003ffce38d95c74234af342b1c412a807a9c77b23dcadd0faf519303"
+once = false
+
+[state.artifacts."task.db:backup"]
+path = "mise.toml"
+kind = "task"
+key = "db:backup"
+sha256 = "23123bf22ed5604df238580addc9f3374333d7bbf21b02719fa09d8d647db669"
+once = false
+
+[state.artifacts."task.db:restore"]
+path = "mise.toml"
+kind = "task"
+key = "db:restore"
+sha256 = "800d7ec963660144ec631aea59efbbc741301b5ae97de977b80bead134f007b8"
+once = false
+
+[source]
+kind = "user-box"

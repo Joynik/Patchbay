@@ -1,0 +1,514 @@
+[settings]
+task.run_auto_install = false
+task.quiet = true
+
+[env]
+_.file = ".env"
+PROJECT_JAVASCRIPT_DIRECTORY = "{{ env.PROJECT_JAVASCRIPT_DIRECTORY | default(value=config_root ~ '/' ~ vars.javascript_directory) }}"
+PROJECT_RUST_DIRECTORY = "{{ env.PROJECT_RUST_DIRECTORY | default(value=config_root ~ '/' ~ vars.rust_directory) }}"
+JAVASCRIPT_BUILD_SCRIPT = "{{ env.JAVASCRIPT_BUILD_SCRIPT | default(value=vars.javascript_build_script) }}"
+DATABASE_EXECUTION_MODE = "{{ env.DATABASE_EXECUTION_MODE | default(value=vars.database_execution_mode) }}"
+DATABASE_BACKUP_FILE = "{{ env.DATABASE_BACKUP_FILE | default(value=vars.database_backup_file) }}"
+DATABASE_RESTORE_FILE = "{{ env.DATABASE_RESTORE_FILE | default(value=vars.database_restore_file) }}"
+SQLITE_MODE = "{{ env.SQLITE_MODE | default(value=vars.sqlite_mode) }}" # local, remote
+SQLITE_REMOTE_URL = "{{ env.SQLITE_REMOTE_URL | default(value=vars.sqlite_remote_url) }}"
+SQLITE_REMOTE_AUTH_TOKEN = "{{ env.SQLITE_REMOTE_AUTH_TOKEN | default(value=vars.sqlite_remote_auth_token) }}"
+SQLITE_DATABASE_PATH = '{% set path = env.SQLITE_DATABASE_PATH | default(value=vars.sqlite_database_path) %}{% if path is starting_with(pat="/") %}{{ path }}{% else %}{{ config_root }}/{{ path }}{% endif %}'
+SQLITE_INIT_SQL = "{{ env.SQLITE_INIT_SQL | default(value=vars.sqlite_init_sql) }}"
+
+[vars]
+javascript_directory = "."
+rust_directory = "src-tauri"
+javascript_build_script = "build"
+database_execution_mode = "native"
+database_backup_file = "backup.sql"
+database_restore_file = ""
+sqlite_mode = "local"
+sqlite_database_path = "data/application.sqlite3"
+sqlite_init_sql = ""
+sqlite_remote_url = ""
+sqlite_remote_auth_token = ""
+
+
+# kitflow:begin task.help
+[tasks."help"]
+description = "List project tasks and descriptions"
+alias = "default"
+quiet = true
+run = '''
+set -eu
+mise tasks ls
+'''
+# kitflow:end task.help
+
+# kitflow:begin task.env:local
+[tasks."env:local"]
+description = "Create .env from the example without replacing an existing file"
+run = '''
+set -eu
+if [ -e .env ] || [ -L .env ]; then
+    echo ".env already exists; edit it manually" >&2
+    exit 2
+fi
+(set -C; cat .env.example > .env)
+'''
+# kitflow:end task.env:local
+
+# kitflow:begin task.check
+[tasks."check"]
+description = "Check code, formatting, types and migrations"
+run = '''
+set -eu
+if [ "${kitflow_checked_lint:-0}" != 1 ]; then
+    mise run --quiet lint
+    kitflow_checked_lint=1
+fi
+if [ "${kitflow_checked_format_check:-0}" != 1 ]; then
+    mise run --quiet format-check
+    kitflow_checked_format_check=1
+fi
+if [ "${kitflow_checked_typecheck:-0}" != 1 ]; then
+    mise run --quiet typecheck
+    kitflow_checked_typecheck=1
+fi
+if [ "${kitflow_checked_typecheck:-0}" != 1 ]; then
+    mise run --quiet typecheck
+    kitflow_checked_typecheck=1
+fi
+'''
+# kitflow:end task.check
+
+# kitflow:begin task.verify
+[tasks."verify"]
+description = "Run checks, application checks and tests sequentially"
+run = '''
+set -eu
+if [ "${kitflow_verified_check:-0}" != 1 ]; then
+    mise run --quiet check
+    kitflow_verified_check=1
+fi
+if [ "${kitflow_verified_test:-0}" != 1 ]; then
+    mise run --quiet test
+    kitflow_verified_test=1
+fi
+'''
+# kitflow:end task.verify
+
+# kitflow:begin task.lint
+[tasks."lint"]
+description = "Lint selected project components"
+run = '''
+set -eu
+rumdl check . --output-format concise --quiet
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo clippy --manifest-path Cargo.toml --workspace --all-targets --quiet --message-format short -- -D warnings
+)
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun lint --no-script --format unix --max-warnings 0 .
+)
+'''
+# kitflow:end task.lint
+
+# kitflow:begin task.check-unused
+[tasks."check-unused"]
+description = "Find potentially unused code and files"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+if [ ! -x node_modules/.bin/knip ]; then
+  printf '%s\n' 'Knip is missing. Install the project dependencies first.' >&2
+  exit 1
+fi
+if command -v bun >/dev/null 2>&1; then
+  set -- bun node_modules/.bin/knip
+else
+  set -- node_modules/.bin/knip
+fi
+"$@" --include files,exports,types --reporter compact --no-progress
+)
+'''
+# kitflow:end task.check-unused
+
+# kitflow:begin task.check-deps
+[tasks."check-deps"]
+description = "Check declared dependencies"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+if [ ! -x node_modules/.bin/knip ]; then
+  printf '%s\n' 'Knip is missing. Install the project dependencies first.' >&2
+  exit 1
+fi
+if command -v bun >/dev/null 2>&1; then
+  set -- bun node_modules/.bin/knip
+else
+  set -- node_modules/.bin/knip
+fi
+"$@" --dependencies --reporter compact --no-progress
+)
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+if [ ! -x target/kitflow-tools/bin/cargo-machete ]; then
+  printf '%s\n' 'Cargo Machete is missing. Run mise run install-cargo-machete first.' >&2
+  exit 1
+fi
+status=0
+output=$(target/kitflow-tools/bin/cargo-machete --quiet --skip-target-dir .) || status=$?
+printf '%s\n' "$output" | awk '
+  /^If you believe cargo-machete/ { exit }
+  NF
+'
+(exit "$status")
+)
+'''
+# kitflow:end task.check-deps
+
+# kitflow:begin task.install-cargo-machete
+[tasks."install-cargo-machete"]
+description = "Install Cargo Machete in the project"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo install --locked --quiet --root target/kitflow-tools cargo-machete --version 0.10.1
+)
+'''
+# kitflow:end task.install-cargo-machete
+
+# kitflow:begin task.lint-fix
+[tasks."lint-fix"]
+description = "Apply supported lint fixes"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun lint --no-script --format unix --max-warnings 0 --fix .
+)
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo clippy --fix --manifest-path Cargo.toml --workspace --all-targets --quiet --message-format short -- -D warnings
+)
+rumdl check . --fix --output-format concise --quiet
+'''
+# kitflow:end task.lint-fix
+
+# kitflow:begin task.format
+[tasks."format"]
+description = "Format selected project components"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo fmt --manifest-path Cargo.toml --all --quiet
+)
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun fmt --no-script --log-level warn .
+)
+rumdl fmt . --output-format concise --quiet
+'''
+# kitflow:end task.format
+
+# kitflow:begin task.format-check
+[tasks."format-check"]
+description = "Check formatting without applying fixes"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo fmt --manifest-path Cargo.toml --all --message-format short -- --check
+)
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun fmt --no-script --list-different .
+)
+rumdl fmt . --check --output-format concise --quiet
+'''
+# kitflow:end task.format-check
+
+# kitflow:begin task.typecheck
+[tasks."typecheck"]
+description = "Check selected project types and native builds"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo check --manifest-path Cargo.toml --workspace --all-targets --quiet --message-format short
+)
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun check --no-script --build --no-pretty
+)
+'''
+# kitflow:end task.typecheck
+
+# kitflow:begin task.test
+[tasks."test"]
+description = "Run selected test runners"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo test --manifest-path Cargo.toml --workspace --all-targets --quiet --message-format short
+)
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun test --pass-with-no-tests --reporter dots
+)
+'''
+# kitflow:end task.test
+
+# kitflow:begin task.test:doc
+[tasks."test:doc"]
+description = "Test doc"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo test --manifest-path Cargo.toml --workspace --doc --quiet --message-format short
+)
+'''
+# kitflow:end task.test:doc
+
+# kitflow:begin task.build
+[tasks."build"]
+description = "Build selected project components"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo build --manifest-path Cargo.toml --workspace --quiet --message-format short
+)
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bun run "${JAVASCRIPT_BUILD_SCRIPT:-build}"
+)
+'''
+# kitflow:end task.build
+
+# kitflow:begin task.build-release
+[tasks."build-release"]
+description = "Build selected native components for release"
+run = '''
+set -eu
+(
+cd "${PROJECT_RUST_DIRECTORY:?Set PROJECT_RUST_DIRECTORY in mise.toml}"
+cargo build --manifest-path Cargo.toml --workspace --release --quiet --message-format short
+)
+'''
+# kitflow:end task.build-release
+
+# kitflow:begin task.app:build
+[tasks."app:build"]
+description = "Build the Tauri application"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bunx --no-install tauri build
+)
+'''
+# kitflow:end task.app:build
+
+# kitflow:begin task.frontend:dev
+[tasks."frontend:dev"]
+description = "Run the frontend development server"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bunx --no-install vite --logLevel info --clearScreen false
+)
+'''
+# kitflow:end task.frontend:dev
+
+# kitflow:begin task.frontend:build
+[tasks."frontend:build"]
+description = "Frontend build"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bunx --no-install vite build --logLevel warn
+)
+'''
+# kitflow:end task.frontend:build
+
+# kitflow:begin task.frontend:preview
+[tasks."frontend:preview"]
+description = "Frontend preview"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bunx --no-install vite preview --logLevel info --clearScreen false
+)
+'''
+# kitflow:end task.frontend:preview
+
+# kitflow:begin task.start
+[tasks."start"]
+description = "Start"
+run = '''
+set -eu
+(
+cd "${PROJECT_JAVASCRIPT_DIRECTORY:?Set PROJECT_JAVASCRIPT_DIRECTORY in mise.toml}"
+bunx --no-install tauri dev
+)
+'''
+# kitflow:end task.start
+
+# kitflow:begin task.db:prepare
+[tasks."db:prepare"]
+description = "Db prepare"
+run = '''
+set -eu
+case "${SQLITE_MODE:-local}" in
+    local) ;;
+    remote) echo "This task requires a local SQLite file; use the remote service's database tools." >&2; exit 2 ;;
+    *) echo "SQLITE_MODE must be local or remote." >&2; exit 2 ;;
+esac
+[ "${DATABASE_EXECUTION_MODE:-native}" = native ] || { echo "Prepare SQLite in the container explicitly" >&2; exit 2; }
+: "${SQLITE_DATABASE_PATH:?Set vars.sqlite_database_path}"
+[ ! -e "$SQLITE_DATABASE_PATH" ] && [ ! -L "$SQLITE_DATABASE_PATH" ] || { echo "SQLite database already exists" >&2; exit 2; }
+mkdir -p "$(dirname "$SQLITE_DATABASE_PATH")"
+temporary=$(mktemp "$(dirname "$SQLITE_DATABASE_PATH")/.kitflow-prepare.XXXXXX")
+trap 'rm -f "$temporary" "$temporary-wal" "$temporary-shm"' EXIT HUP INT TERM
+if [ -n "${SQLITE_INIT_SQL:-}" ]; then
+    [ -f "$SQLITE_INIT_SQL" ] || { echo "Initialization SQL does not exist: $SQLITE_INIT_SQL" >&2; exit 2; }
+    sqlite3 -bail "$temporary" < "$SQLITE_INIT_SQL"
+else
+    sqlite3 -bail "$temporary" 'PRAGMA user_version=0;'
+fi
+ln "$temporary" "$SQLITE_DATABASE_PATH"
+'''
+# kitflow:end task.db:prepare
+
+# kitflow:begin task.db:backup
+[tasks."db:backup"]
+description = "Back up the database to a new SQL file"
+usage = "arg \"[file]\" help=\"SQL file path; defaults to mise settings\"; flag \"--docker\" help=\"Run in the configured Compose service\""
+run = '''
+set -eu
+run_compose() {
+    if [ -n "${COMPOSE_WRAPPER:-}" ]; then
+        case "$COMPOSE_WRAPPER" in
+            /*) wrapper=$COMPOSE_WRAPPER ;;
+            *) wrapper="${MISE_CONFIG_ROOT:-$PWD}/$COMPOSE_WRAPPER" ;;
+        esac
+        sh "$wrapper" "$@"
+    else
+        docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" "$@"
+    fi
+}
+case "${SQLITE_MODE:-local}" in
+    local) ;;
+    remote) echo "This task requires a local SQLite file; use the remote service's database tools." >&2; exit 2 ;;
+    *) echo "SQLITE_MODE must be local or remote." >&2; exit 2 ;;
+esac
+if [ "${usage_docker:-false}" = true ]; then DATABASE_EXECUTION_MODE=docker; fi
+case "${DATABASE_EXECUTION_MODE:-native}" in
+    native) ;;
+    docker)
+        : "${COMPOSE_FILE:?Select Docker or set COMPOSE_FILE}"
+        : "${COMPOSE_ENV_FILE:?Set COMPOSE_ENV_FILE}"
+        : "${DATABASE_DOCKER_SERVICE:?Set vars.database_docker_service}"
+        ;;
+    *) echo "DATABASE_EXECUTION_MODE must be native or docker" >&2; exit 2 ;;
+esac
+: "${SQLITE_DATABASE_PATH:?Set vars.sqlite_database_path}"
+[ "${DATABASE_EXECUTION_MODE:-native}" = docker ] || [ -f "$SQLITE_DATABASE_PATH" ] || { echo "SQLite database does not exist: $SQLITE_DATABASE_PATH" >&2; exit 2; }
+output=${usage_file:-${DATABASE_BACKUP_FILE:-backup.sql}}
+[ ! -e "$output" ] && [ ! -L "$output" ] || { echo "Backup file already exists: $output" >&2; exit 2; }
+temporary=$(mktemp "$(dirname "$output")/.kitflow-backup.XXXXXX")
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+if [ "${DATABASE_EXECUTION_MODE:-native}" = docker ]; then
+    : "${SQLITE_CONTAINER_PATH:?Set vars.sqlite_container_path}"
+    run_compose exec -T "$DATABASE_DOCKER_SERVICE" sqlite3 -readonly -bail "$SQLITE_CONTAINER_PATH" .dump > "$temporary"
+else
+    sqlite3 -readonly -bail "$SQLITE_DATABASE_PATH" .dump > "$temporary"
+fi
+ln "$temporary" "$output"
+printf 'Database backup: %s\n' "$output"
+'''
+# kitflow:end task.db:backup
+
+# kitflow:begin task.db:restore
+[tasks."db:restore"]
+description = "Restore the database from SQL; stop application writes first"
+usage = "arg \"[file]\" help=\"SQL file path; defaults to mise settings\"; flag \"--docker\" help=\"Run in the configured Compose service\""
+run = '''
+set -eu
+run_compose() {
+    if [ -n "${COMPOSE_WRAPPER:-}" ]; then
+        case "$COMPOSE_WRAPPER" in
+            /*) wrapper=$COMPOSE_WRAPPER ;;
+            *) wrapper="${MISE_CONFIG_ROOT:-$PWD}/$COMPOSE_WRAPPER" ;;
+        esac
+        sh "$wrapper" "$@"
+    else
+        docker compose --env-file "$COMPOSE_ENV_FILE" -f "$COMPOSE_FILE" "$@"
+    fi
+}
+case "${SQLITE_MODE:-local}" in
+    local) ;;
+    remote) echo "This task requires a local SQLite file; use the remote service's database tools." >&2; exit 2 ;;
+    *) echo "SQLITE_MODE must be local or remote." >&2; exit 2 ;;
+esac
+if [ "${usage_docker:-false}" = true ]; then DATABASE_EXECUTION_MODE=docker; fi
+case "${DATABASE_EXECUTION_MODE:-native}" in
+    native) ;;
+    docker)
+        : "${COMPOSE_FILE:?Select Docker or set COMPOSE_FILE}"
+        : "${COMPOSE_ENV_FILE:?Set COMPOSE_ENV_FILE}"
+        : "${DATABASE_DOCKER_SERVICE:?Set vars.database_docker_service}"
+        ;;
+    *) echo "DATABASE_EXECUTION_MODE must be native or docker" >&2; exit 2 ;;
+esac
+: "${SQLITE_DATABASE_PATH:?Set vars.sqlite_database_path}"
+input=${usage_file:-${DATABASE_RESTORE_FILE:-}}
+[ -n "$input" ] && [ -f "$input" ] || { echo "Specify an existing SQL restore file" >&2; exit 2; }
+if [ "${DATABASE_EXECUTION_MODE:-native}" = docker ]; then
+    : "${SQLITE_CONTAINER_PATH:?Set vars.sqlite_container_path}"
+    run_compose exec -T "$DATABASE_DOCKER_SERVICE" sh -eu -c '
+SQLITE_DATABASE_PATH=$1
+[ ! -e "$SQLITE_DATABASE_PATH" ] || [ -f "$SQLITE_DATABASE_PATH" ] || { echo "SQLite target is not a regular file" >&2; exit 2; }
+[ ! -L "$SQLITE_DATABASE_PATH" ] || { echo "Refusing to replace a SQLite symbolic link" >&2; exit 2; }
+[ ! -e "$SQLITE_DATABASE_PATH-wal" ] && [ ! -e "$SQLITE_DATABASE_PATH-shm" ] || { echo "Stop the SQLite application and checkpoint its WAL before restoring" >&2; exit 2; }
+temporary=$(mktemp "$(dirname "$SQLITE_DATABASE_PATH")/.kitflow-restore.XXXXXX")
+trap '\''rm -f "$temporary" "$temporary-wal" "$temporary-shm"'\'' EXIT HUP INT TERM
+sqlite3 -bail "$temporary"
+[ "$(sqlite3 -readonly "$temporary" '\''PRAGMA integrity_check;'\'')" = ok ] || { echo "Restored SQLite database failed integrity checking" >&2; exit 1; }
+if [ -f "$SQLITE_DATABASE_PATH" ]; then
+    case "$(uname -s)" in
+        Darwin) chmod "$(stat -f '\''%Lp'\'' "$SQLITE_DATABASE_PATH")" "$temporary" ;;
+        *) chmod --reference="$SQLITE_DATABASE_PATH" "$temporary" ;;
+    esac
+fi
+mv -f "$temporary" "$SQLITE_DATABASE_PATH"
+printf '\''Database restored: %s\n'\'' "$SQLITE_DATABASE_PATH"
+
+' sh "$SQLITE_CONTAINER_PATH" < "$input"
+else
+[ ! -e "$SQLITE_DATABASE_PATH" ] || [ -f "$SQLITE_DATABASE_PATH" ] || { echo "SQLite target is not a regular file" >&2; exit 2; }
+[ ! -L "$SQLITE_DATABASE_PATH" ] || { echo "Refusing to replace a SQLite symbolic link" >&2; exit 2; }
+[ ! -e "$SQLITE_DATABASE_PATH-wal" ] && [ ! -e "$SQLITE_DATABASE_PATH-shm" ] || { echo "Stop the SQLite application and checkpoint its WAL before restoring" >&2; exit 2; }
+temporary=$(mktemp "$(dirname "$SQLITE_DATABASE_PATH")/.kitflow-restore.XXXXXX")
+trap 'rm -f "$temporary" "$temporary-wal" "$temporary-shm"' EXIT HUP INT TERM
+sqlite3 -bail "$temporary" < "$input"
+[ "$(sqlite3 -readonly "$temporary" 'PRAGMA integrity_check;')" = ok ] || { echo "Restored SQLite database failed integrity checking" >&2; exit 1; }
+if [ -f "$SQLITE_DATABASE_PATH" ]; then
+    case "$(uname -s)" in
+        Darwin) chmod "$(stat -f '%Lp' "$SQLITE_DATABASE_PATH")" "$temporary" ;;
+        *) chmod --reference="$SQLITE_DATABASE_PATH" "$temporary" ;;
+    esac
+fi
+mv -f "$temporary" "$SQLITE_DATABASE_PATH"
+printf 'Database restored: %s\n' "$SQLITE_DATABASE_PATH"
+fi
+'''
+# kitflow:end task.db:restore

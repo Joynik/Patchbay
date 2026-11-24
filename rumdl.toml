@@ -1,0 +1,16 @@
+[global]
+line-length = 100
+
+exclude = [
+  ".beads/*.md",
+  ".agents/*.md",
+  "LICENSE",
+]
+
+[MD013]
+line-length = 100
+code-blocks = false
+tables = false
+headings = true
+reflow = true
+reflow-mode = "normalize"
