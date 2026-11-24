@@ -204,3 +204,67 @@ fn opencode_current_and_legacy_formats_round_trip() {
     let from_legacy: Value = serde_json::from_str(&restored).unwrap();
     assert_eq!(from_legacy["mcp"]["example"], server);
 }
+
+#[test]
+fn restores_text_size_and_agent_order_from_local_settings() {
+    let (root, config_file, mut workspace) = fixture();
+    let data = root.path().join("patchbay");
+    fs::write(
+        data.join("local.json"),
+        r#"{"theme":"light","locale":"en","agents":{}}"#,
+    )
+    .unwrap();
+    workspace.reload().unwrap();
+
+    let snapshot = workspace.snapshot();
+    assert_eq!(snapshot.text_size, super::super::TextSize::Default);
+    let codex = snapshot
+        .agents
+        .iter()
+        .find(|agent| agent.id == "codex")
+        .unwrap();
+    let resolved = config_file
+        .parent()
+        .unwrap()
+        .canonicalize()
+        .unwrap()
+        .join("config.toml");
+    assert_eq!(codex.config_file.as_ref(), Some(&resolved));
+
+    let ids: Vec<_> = snapshot
+        .agents
+        .iter()
+        .rev()
+        .map(|agent| agent.id.clone())
+        .collect();
+    assert!(
+        workspace
+            .change(Action::AgentOrder {
+                ids: vec![ids[0].clone(); ids.len()]
+            })
+            .is_err()
+    );
+    workspace
+        .change(Action::AgentOrder { ids: ids.clone() })
+        .unwrap();
+    workspace
+        .change(Action::TextSize {
+            size: super::super::TextSize::Large,
+        })
+        .unwrap();
+
+    let snapshot = Workspace::open(root.path().into(), data)
+        .unwrap()
+        .snapshot();
+    assert_eq!(snapshot.text_size, super::super::TextSize::Large);
+    assert_eq!(snapshot.theme, "light");
+    assert_eq!(
+        snapshot
+            .agents
+            .into_iter()
+            .map(|agent| agent.id)
+            .collect::<Vec<_>>(),
+        ids
+    );
+    assert!(!config_file.exists());
+}

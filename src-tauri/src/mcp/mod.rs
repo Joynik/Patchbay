@@ -59,10 +59,24 @@ pub struct AgentSettings {
     pub folder: Option<PathBuf>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TextSize {
+    Small,
+    #[default]
+    Default,
+    Large,
+    ExtraLarge,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Local {
     pub theme: String,
     pub locale: String,
+    #[serde(default)]
+    pub text_size: TextSize,
+    #[serde(default)]
+    pub agent_order: Vec<String>,
     pub agents: BTreeMap<String, AgentSettings>,
 }
 impl Default for Local {
@@ -70,6 +84,8 @@ impl Default for Local {
         Self {
             theme: "dark".into(),
             locale: "en".into(),
+            text_size: TextSize::default(),
+            agent_order: Vec::new(),
             agents: BTreeMap::new(),
         }
     }

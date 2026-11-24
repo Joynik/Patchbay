@@ -1,10 +1,13 @@
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Cable, Pencil, Plus, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import type { Action, Connection, Server, Snapshot } from "../app/api";
+import { AgentIcon } from "../components/ui/AgentIcon";
 import { Modal } from "../components/ui/Modal";
 import { Switch } from "../components/ui/Switch";
 import type { Messages } from "../i18n";
+import { DiscoveredServers } from "./library/DiscoveredServers";
+import { ServerFields } from "./library/ServerFields";
 
 export function Library({
     data,
@@ -54,123 +57,142 @@ export function Library({
     }
 
     return (
-        <div className="stack">
-            <div className="flex justify-end">
-                <button
-                    className="button primary"
-                    disabled={busy}
-                    onClick={() => {
-                        setServer(null);
-                        setDialog("add");
-                    }}
-                >
-                    <Plus size={17} />
-                    {t.add}
-                </button>
-            </div>
-            {data.servers.length === 0 ? (
-                <div className="panel empty">{t.empty}</div>
-            ) : (
-                <div className="table-frame">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th scope="col">{t.name}</th>
-                                <th scope="col">{t.global}</th>
-                                {agents.map((agent) => (
-                                    <th scope="col" key={agent.id}>
-                                        {agent.name}
+        <div className="library-layout">
+            <section className="stack" aria-labelledby="managed-servers">
+                <div className="flex items-center justify-between gap-3">
+                    <h2 id="managed-servers" className="section-heading">
+                        <Cable size={17} />
+                        {t.managedServers}
+                    </h2>
+                    <button
+                        className="button primary"
+                        disabled={busy}
+                        onClick={() => {
+                            setServer(null);
+                            setDialog("add");
+                        }}
+                    >
+                        <Plus size={17} />
+                        {t.add}
+                    </button>
+                </div>
+                {data.servers.length === 0 ? (
+                    <div className="panel empty">{t.empty}</div>
+                ) : (
+                    <div className="table-frame">
+                        <table className="managed-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">{t.name}</th>
+                                    <th scope="col">{t.description}</th>
+                                    <th scope="col">{t.agents}</th>
+                                    <th scope="col">{t.global}</th>
+                                    <th scope="col">
+                                        <span className="sr-only">{t.actions}</span>
                                     </th>
-                                ))}
-                                <th scope="col">
-                                    <span className="sr-only">{t.edit}</span>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {data.servers.map((item) => (
-                                <tr key={item.id}>
-                                    <th scope="row">
-                                        <div>{item.name}</div>
-                                        <div className="muted text-xs font-normal">
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {data.servers.map((item) => (
+                                    <tr key={item.id}>
+                                        <th scope="row">{item.name}</th>
+                                        <td
+                                            className="server-description"
+                                            title={item.description || undefined}
+                                        >
                                             {item.description ||
                                                 (item.connection.type === "http"
                                                     ? "Streamable HTTP"
                                                     : "stdio")}
-                                        </div>
-                                    </th>
-                                    <td>
-                                        <Switch
-                                            checked={item.enabled}
-                                            disabled={busy}
-                                            aria-label={`${t.global} · ${item.name}`}
-                                            onCheckedChange={(enabled) =>
-                                                void act({
-                                                    type: "global",
-                                                    server: item.id,
-                                                    enabled,
-                                                })
-                                            }
-                                        />
-                                    </td>
-                                    {agents.map((agent) => (
-                                        <td key={agent.id}>
+                                        </td>
+                                        <td>
+                                            <div className="agent-assignments">
+                                                {agents.map((agent) => (
+                                                    <button
+                                                        key={agent.id}
+                                                        type="button"
+                                                        role="switch"
+                                                        className="agent-assignment"
+                                                        aria-checked={item.agents.includes(
+                                                            agent.id,
+                                                        )}
+                                                        title={agent.name}
+                                                        disabled={
+                                                            busy ||
+                                                            !agent.enabled ||
+                                                            !agent.folder ||
+                                                            (!agent.supports_http &&
+                                                                item.connection.type === "http")
+                                                        }
+                                                        aria-label={`${agent.name} · ${item.name}`}
+                                                        onClick={() =>
+                                                            void act({
+                                                                type: "assign",
+                                                                server: item.id,
+                                                                agent: agent.id,
+                                                                enabled: !item.agents.includes(
+                                                                    agent.id,
+                                                                ),
+                                                            })
+                                                        }
+                                                    >
+                                                        <AgentIcon id={agent.id} />
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        <td>
                                             <Switch
-                                                checked={item.agents.includes(agent.id)}
-                                                disabled={
-                                                    busy ||
-                                                    !agent.enabled ||
-                                                    !agent.folder ||
-                                                    (!agent.supports_http &&
-                                                        item.connection.type === "http")
-                                                }
-                                                aria-label={`${agent.name} · ${item.name}`}
+                                                checked={item.enabled}
+                                                disabled={busy}
+                                                aria-label={`${t.global} · ${item.name}`}
                                                 onCheckedChange={(enabled) =>
                                                     void act({
-                                                        type: "assign",
+                                                        type: "global",
                                                         server: item.id,
-                                                        agent: agent.id,
                                                         enabled,
                                                     })
                                                 }
                                             />
                                         </td>
-                                    ))}
-                                    <td>
-                                        <div className="flex justify-end gap-1">
-                                            <button
-                                                className="icon-button"
-                                                disabled={busy}
-                                                title={t.edit}
-                                                aria-label={t.edit}
-                                                onClick={() => {
-                                                    setServer(item);
-                                                    setDialog("edit");
-                                                }}
-                                            >
-                                                <Pencil size={15} />
-                                            </button>
-                                            <button
-                                                className="icon-button"
-                                                disabled={busy}
-                                                title={t.remove}
-                                                aria-label={t.remove}
-                                                onClick={() => {
-                                                    setServer(item);
-                                                    setDialog("remove");
-                                                }}
-                                            >
-                                                <Trash2 size={15} />
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
+                                        <td>
+                                            <div className="flex justify-end gap-1">
+                                                <button
+                                                    className="icon-button"
+                                                    disabled={busy}
+                                                    title={t.edit}
+                                                    aria-label={t.edit}
+                                                    onClick={() => {
+                                                        setServer(item);
+                                                        setDialog("edit");
+                                                    }}
+                                                >
+                                                    <Pencil size={15} />
+                                                </button>
+                                                <button
+                                                    className="icon-button"
+                                                    disabled={busy}
+                                                    title={t.remove}
+                                                    aria-label={t.remove}
+                                                    onClick={() => {
+                                                        setServer(item);
+                                                        setDialog("remove");
+                                                    }}
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </section>
+            <DiscoveredServers agents={data.agents} t={t} busy={busy} act={act} />
             <Modal
+                wide={dialog === "add"}
                 open={dialog !== null}
                 setOpen={(open) => {
                     if (!open) {
@@ -181,18 +203,20 @@ export function Library({
                 title={dialog === "edit" ? t.edit : dialog === "remove" ? t.remove : t.add}
             >
                 <form key={dialog} className="stack mt-4" onSubmit={submit}>
-                    {dialog === "add" && <ConnectionFields t={t} />}
+                    {dialog === "add" && <ServerFields t={t} busy={busy} />}
                     {dialog === "remove" ? (
                         <p>{t.confirmRemove}</p>
                     ) : (
-                        <label className="field">
-                            {t.description}
-                            <textarea
-                                name="description"
-                                defaultValue={server?.description}
-                                rows={2}
-                            />
-                        </label>
+                        dialog === "edit" && (
+                            <label className="field">
+                                {t.description}
+                                <textarea
+                                    name="description"
+                                    defaultValue={server?.description}
+                                    rows={2}
+                                />
+                            </label>
+                        )
                     )}
                     <div className="actions">
                         <button type="button" className="button" onClick={() => setDialog(null)}>
@@ -208,45 +232,5 @@ export function Library({
                 </form>
             </Modal>
         </div>
-    );
-}
-
-function ConnectionFields({ t }: { t: Messages }) {
-    const [transport, setTransport] = useState("stdio");
-    return (
-        <>
-            <label className="field">
-                {t.name}
-                <input name="name" required pattern="[a-zA-Z0-9_\-]+" />
-            </label>
-            <label className="field">
-                {t.transport}
-                <select
-                    name="transport"
-                    value={transport}
-                    onChange={(event) => setTransport(event.target.value)}
-                >
-                    <option value="stdio">stdio</option>
-                    <option value="http">Streamable HTTP</option>
-                </select>
-            </label>
-            {transport === "http" ? (
-                <label className="field">
-                    {t.url}
-                    <input name="url" type="url" required />
-                </label>
-            ) : (
-                <>
-                    <label className="field">
-                        {t.command}
-                        <input name="command" required />
-                    </label>
-                    <label className="field">
-                        {t.args}
-                        <textarea name="args" rows={3} />
-                    </label>
-                </>
-            )}
-        </>
     );
 }

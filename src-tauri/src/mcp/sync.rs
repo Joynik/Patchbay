@@ -37,6 +37,7 @@ pub struct AgentView {
     name: String,
     folder: Option<PathBuf>,
     override_folder: Option<PathBuf>,
+    config_file: Option<PathBuf>,
     enabled: bool,
     hidden: bool,
     supports_http: bool,
@@ -51,6 +52,7 @@ pub struct Snapshot {
     agents: Vec<AgentView>,
     theme: String,
     locale: String,
+    text_size: super::TextSize,
     issues: Vec<Issue>,
 }
 
@@ -104,6 +106,12 @@ pub enum Action {
     Settings {
         theme: String,
         locale: String,
+    },
+    TextSize {
+        size: super::TextSize,
+    },
+    AgentOrder {
+        ids: Vec<String>,
     },
     Retry,
 }
@@ -184,7 +192,7 @@ impl Workspace {
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        let agents = self
+        let mut agents: Vec<_> = self
             .definitions
             .iter()
             .map(|definition| {
@@ -195,6 +203,7 @@ impl Workspace {
                     name: definition.name.clone(),
                     folder: folder.clone(),
                     override_folder: state.and_then(|state| state.folder.clone()),
+                    config_file: None,
                     enabled: state.is_some_and(|state| state.enabled),
                     hidden: state.is_some_and(|state| state.hidden),
                     supports_http: false,
@@ -209,6 +218,7 @@ impl Workspace {
                         return Ok(());
                     };
                     let path = config_path(adapter, &folder, &self.home)?;
+                    view.config_file = Some(path.clone());
                     let source = storage::read(&path)?.unwrap_or_default();
                     for (key, value) in adapter.read(&source)? {
                         let hash = storage::fingerprint(&value);
@@ -241,11 +251,19 @@ impl Workspace {
                 view
             })
             .collect();
+        agents.sort_by_key(|agent| {
+            self.local
+                .agent_order
+                .iter()
+                .position(|id| id == &agent.id)
+                .unwrap_or(usize::MAX)
+        });
         Snapshot {
             servers: self.library.servers.clone(),
             agents,
             theme: self.local.theme.clone(),
             locale: self.local.locale.clone(),
+            text_size: self.local.text_size,
             issues: self
                 .issues
                 .iter()
@@ -365,6 +383,19 @@ impl Workspace {
                 }
                 self.local.theme = theme;
                 self.local.locale = locale;
+                sync = false;
+            }
+            Action::TextSize { size } => {
+                self.local.text_size = size;
+                sync = false;
+            }
+            Action::AgentOrder { ids } => {
+                let expected: BTreeSet<_> =
+                    self.definitions.iter().map(|agent| &agent.id).collect();
+                if ids.len() != expected.len() || ids.iter().collect::<BTreeSet<_>>() != expected {
+                    return Err("Agent order must contain every agent exactly once".into());
+                }
+                self.local.agent_order = ids;
                 sync = false;
             }
             Action::Retry => {}

@@ -13,11 +13,14 @@ export interface Server {
     agents: string[];
 }
 
+export type TextSize = "small" | "default" | "large" | "extra_large";
+
 export interface Agent {
     id: string;
     name: string;
     folder: string | null;
     override_folder: string | null;
+    config_file: string | null;
     enabled: boolean;
     hidden: boolean;
     supports_http: boolean;
@@ -31,6 +34,7 @@ export interface Snapshot {
     agents: Agent[];
     theme: string;
     locale: string;
+    text_size: TextSize;
     issues: { agent: string; server: string; message: string }[];
 }
 
@@ -45,6 +49,8 @@ export type Action =
     | { type: "folder"; agent: string; folder: string | null }
     | { type: "adopt"; agent: string; key: string }
     | { type: "settings"; theme: string; locale: string }
+    | { type: "text_size"; size: TextSize }
+    | { type: "agent_order"; ids: string[] }
     | { type: "retry" };
 
 export const load = () => invoke<Snapshot>("snapshot");

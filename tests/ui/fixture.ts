@@ -7,6 +7,7 @@ export const codex: Agent = {
     name: "Codex",
     folder: "/fixture/.codex",
     override_folder: null,
+    config_file: "/fixture/.codex/config.toml",
     enabled: true,
     hidden: false,
     supports_http: true,
@@ -41,6 +42,7 @@ export const test = base.extend<{ desktop: Desktop }>({
             servers: [],
             locale: "en",
             theme: "dark",
+            text_size: "default",
             issues: [],
         };
 

@@ -65,8 +65,9 @@ export function App() {
     }, []);
     useEffect(() => {
         document.documentElement.dataset.theme = data?.theme ?? "dark";
+        document.documentElement.dataset.textSize = data?.text_size ?? "default";
         document.documentElement.lang = data?.locale ?? "en";
-    }, [data?.theme, data?.locale]);
+    }, [data?.theme, data?.locale, data?.text_size]);
 
     return (
         <div className="shell">
@@ -78,6 +79,7 @@ export function App() {
                     {Object.entries(pages).map(([key, Icon]) => (
                         <button
                             key={key}
+                            className={key === "settings" ? "navigation-settings" : undefined}
                             aria-current={page === key ? "page" : undefined}
                             onClick={() => setPage(key as Page)}
                         >

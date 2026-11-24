@@ -1,6 +1,6 @@
 [package]
 name = "patchbay"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [package.metadata.cargo-machete]
@@ -15,7 +15,7 @@ sha2 = "0.11.1"
 tauri = { version = "2.12.7", features = [] }
 tauri-plugin-single-instance = "2.5.5"
 tempfile = "3.27.0"
-toml_edit = { version = "0.25.20+spec-1.1.0", features = ["serde"] }
+toml_edit = { version = "0.25.20", features = ["serde"] }
 url = "2.5.9"
 uuid = { version = "1.29.3", features = ["v4"] }
 
