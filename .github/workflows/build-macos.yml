@@ -1,0 +1,63 @@
+name: Build macOS
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        name: Build macOS (${{ matrix.arch }})
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - runner: macos-15
+                      arch: arm64
+                    - runner: macos-15-intel
+                      arch: x86_64
+        runs-on: ${{ matrix.runner }}
+        timeout-minutes: 30
+
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+              with:
+                  bun-version: "1.4.5"
+            - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+              with:
+                  install: false
+                  cache: false
+
+            - name: Install build dependencies
+              run: |
+                  rustup toolchain install stable --profile minimal
+                  rustup default stable
+                  bun install --frozen-lockfile
+
+            - name: Build the macOS app
+              run: |
+                  mise trust mise.toml
+                  mise run app:build
+
+            - name: Package the app
+              env:
+                  ARCH: ${{ matrix.arch }}
+              run: |
+                  app="src-tauri/target/release/bundle/macos/Patchbay.app"
+                  version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
+                  test "$(lipo -archs "$app/Contents/MacOS/patchbay")" = "$ARCH"
+                  mkdir -p artifacts
+                  ditto -c -k --sequesterRsrc --keepParent "$app" "artifacts/Patchbay-$version-macos-$ARCH.zip"
+
+            - name: Upload build artifact
+              uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+              with:
+                  path: artifacts/*.zip
+                  if-no-files-found: error
+                  archive: false
