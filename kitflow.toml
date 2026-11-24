@@ -3,11 +3,11 @@ migrated_box_version = 1
 box_version = 11
 
 [selection]
-components = ["javascript", "typescript", "rust", "sqlite", "knip", "cargo-machete", "bun", "vite", "rumdl", "react", "tauri", "bun-tests", "rust-tests", "env-example", "agents"]
+components = ["javascript", "typescript", "rust", "knip", "cargo-machete", "bun", "vite", "rumdl", "react", "tauri", "bun-tests", "rust-tests", "env-example", "agents"]
 excluded = []
 
 [state]
-seeded_mise_keys = [["env", "DATABASE_BACKUP_FILE"], ["env", "DATABASE_EXECUTION_MODE"], ["env", "DATABASE_RESTORE_FILE"], ["env", "JAVASCRIPT_BUILD_SCRIPT"], ["env", "PROJECT_JAVASCRIPT_DIRECTORY"], ["env", "PROJECT_RUST_DIRECTORY"], ["env", "SQLITE_DATABASE_PATH"], ["env", "SQLITE_INIT_SQL"], ["env", "SQLITE_MODE"], ["env", "SQLITE_REMOTE_AUTH_TOKEN"], ["env", "SQLITE_REMOTE_URL"], ["env", "_", "file"], ["settings", "task", "quiet"], ["settings", "task", "run_auto_install"], ["vars", "database_backup_file"], ["vars", "database_execution_mode"], ["vars", "database_restore_file"], ["vars", "javascript_build_script"], ["vars", "javascript_directory"], ["vars", "rust_directory"], ["vars", "sqlite_database_path"], ["vars", "sqlite_init_sql"], ["vars", "sqlite_mode"], ["vars", "sqlite_remote_auth_token"], ["vars", "sqlite_remote_url"]]
+seeded_mise_keys = [["env", "JAVASCRIPT_BUILD_SCRIPT"], ["env", "PROJECT_JAVASCRIPT_DIRECTORY"], ["env", "PROJECT_RUST_DIRECTORY"], ["env", "_", "file"], ["settings", "task", "quiet"], ["settings", "task", "run_auto_install"], ["vars", "javascript_build_script"], ["vars", "javascript_directory"], ["vars", "rust_directory"]]
 
 [state.artifacts.readme]
 path = "README.md"
@@ -27,14 +27,14 @@ once = true
 path = ".gitignore"
 kind = "block"
 key = ""
-sha256 = "cdaebdcb213002cd8a010920ca188bf597a02f037aae75578eba183bad266fad"
+sha256 = "de005763de8fa7f76714b5527357e372ccab74d82646dcc06b34e8d91445919b"
 once = false
 
 [state.artifacts.env-example]
 path = ".env.example"
 kind = "file"
 key = ""
-sha256 = "4972a65f47733dba47adc618c9fc45e7f106912d22a3f304e588009a92828289"
+sha256 = "6b807834c78322f2522c42be69cc2d39dafe8f91f0cc0590596495a7af0bf95f"
 once = false
 
 [state.artifacts.bunfig]
@@ -133,20 +133,6 @@ path = "mise.toml"
 kind = "defaults"
 key = ""
 sha256 = "2838618a01a64ffa6c535e9b43813cf9d582fd860de0478308595c363d5afd56"
-once = true
-
-[state.artifacts."defaults.database"]
-path = "mise.toml"
-kind = "defaults"
-key = ""
-sha256 = "76be13fcdc33969835db612062770e57ccc4edc8e97e8018949ef2e5a42bf3aa"
-once = true
-
-[state.artifacts."defaults.sqlite"]
-path = "mise.toml"
-kind = "defaults"
-key = ""
-sha256 = "54341d92c2cccc45a9da5f5b8aa968c734b1250e67f047c9342f3df47c45f6e1"
 once = true
 
 [state.artifacts."task.help"]
@@ -294,27 +280,6 @@ path = "mise.toml"
 kind = "task"
 key = "start"
 sha256 = "d469813bd6074c31413795eaf2c1a4748c041f02837ba4fbec036d752bdf35e5"
-once = false
-
-[state.artifacts."task.db:prepare"]
-path = "mise.toml"
-kind = "task"
-key = "db:prepare"
-sha256 = "34294a32003ffce38d95c74234af342b1c412a807a9c77b23dcadd0faf519303"
-once = false
-
-[state.artifacts."task.db:backup"]
-path = "mise.toml"
-kind = "task"
-key = "db:backup"
-sha256 = "23123bf22ed5604df238580addc9f3374333d7bbf21b02719fa09d8d647db669"
-once = false
-
-[state.artifacts."task.db:restore"]
-path = "mise.toml"
-kind = "task"
-key = "db:restore"
-sha256 = "800d7ec963660144ec631aea59efbbc741301b5ae97de977b80bead134f007b8"
 once = false
 
 [source]

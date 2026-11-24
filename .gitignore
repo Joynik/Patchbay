@@ -56,15 +56,8 @@ target/
 # Tauri
 src-tauri/gen/
 
-# SQLite
-*.sqlite3
-*.sqlite3-*
-
 # rumdl
 .rumdl_cache/
-
-# Database backups
-/backup.sql
 # </kitflow>
 
 # <user>
