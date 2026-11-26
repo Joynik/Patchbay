@@ -46,24 +46,18 @@ jobs:
                       exit 0
                   fi
 
-                  checksum() {
-                      jq -er --arg name "Patchbay-$VERSION-macos-$1.zip" '
+                  checksum=$(
+                      jq -er --arg name "Patchbay-$VERSION-macos-arm64.zip" '
                           .assets[] | select(.name == $name and .state == "uploaded")
                           | .digest | select(test("^sha256:[0-9a-f]{64}$")) | split(":")[1]
                       ' "$RUNNER_TEMP/patchbay-release.json"
-                  }
-
-                  arm=$(checksum arm64)
-                  intel=$(checksum x86_64)
+                  )
                   cat > Casks/patchbay.rb <<CASK
                   cask "patchbay" do
-                    arch arm: "arm64", intel: "x86_64"
-
                     version "$VERSION"
-                    sha256 arm: "$arm",
-                           intel: "$intel"
+                    sha256 "$checksum"
 
-                    url "https://github.com/Joynik/Patchbay/releases/download/#{version}/Patchbay-#{version}-macos-#{arch}.zip"
+                    url "https://github.com/Joynik/Patchbay/releases/download/#{version}/Patchbay-#{version}-macos-arm64.zip"
                     name "Patchbay"
                     desc "Manage MCP server configurations across AI agents"
                     homepage "https://github.com/Joynik/Patchbay"
@@ -73,6 +67,7 @@ jobs:
                       strategy :github_latest
                     end
 
+                    depends_on arch: :arm64
                     depends_on :macos
 
                     app "Patchbay.app"

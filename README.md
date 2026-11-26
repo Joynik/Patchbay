@@ -9,14 +9,14 @@ Pi, Hermes Agent, and DeepSeek Harness. Transport support varies by agent.
 
 ## Install
 
-Use Homebrew on Apple Silicon or Intel Macs.
+Patchbay requires a Mac with Apple Silicon. Install it with Homebrew.
 
 ```sh
 brew install --cask joynik/tap/patchbay
 ```
 
-To install manually, download the macOS ZIP for your Mac from [GitHub Releases][releases]. Extract
-it and move `Patchbay.app` to Applications. The release builds are not notarized.
+To install manually, download the Apple Silicon ZIP from [GitHub Releases][releases]. Extract it and
+move `Patchbay.app` to Applications. The release builds are not notarized.
 
 To upgrade a Homebrew installation, run `brew update` and `brew upgrade --cask joynik/tap/patchbay`.
 
