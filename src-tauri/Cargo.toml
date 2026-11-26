@@ -19,5 +19,7 @@ toml_edit = { version = "0.25.20", features = ["serde"] }
 url = "2.5.9"
 uuid = { version = "1.29.3", features = ["v4"] }
 
+yaml-edit = { version = "0.3.6", default-features = false }
+
 [build-dependencies]
 tauri-build = { version = "2.7.6", features = [] }

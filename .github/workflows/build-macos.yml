@@ -3,10 +3,15 @@ name: Build macOS
 on:
     push:
         branches: [main]
+        tags: ["[0-9]*.[0-9]*.[0-9]*"]
     workflow_dispatch:
 
 permissions:
     contents: read
+
+concurrency:
+    group: macos-${{ github.ref }}
+    cancel-in-progress: false
 
 jobs:
     build:
@@ -58,6 +63,73 @@ jobs:
             - name: Upload build artifact
               uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
               with:
+                  name: patchbay-${{ matrix.arch }}
                   path: artifacts/*.zip
                   if-no-files-found: error
-                  archive: false
+                  compression-level: 0
+
+    release:
+        if: github.ref_type == 'tag'
+        needs: build
+        runs-on: ubuntu-24.04
+        timeout-minutes: 10
+        permissions:
+            contents: write
+        steps:
+            - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+              with:
+                  persist-credentials: false
+            - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+              with:
+                  pattern: patchbay-*
+                  path: release-assets
+                  merge-multiple: true
+            - name: Publish both macOS builds
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  RELEASE_TAG: ${{ github.ref_name }}
+              run: |
+                  python3 - <<'PY'
+                  import json
+                  import os
+                  import re
+                  import tomllib
+                  from pathlib import Path
+
+                  tag = os.environ['RELEASE_TAG']
+                  if not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)', tag):
+                      raise SystemExit('Expected a MAJOR.MINOR.PATCH tag')
+                  versions = [
+                      json.loads(Path('package.json').read_text())['version'],
+                      json.loads(Path('src-tauri/tauri.conf.json').read_text())['version'],
+                      tomllib.loads(Path('src-tauri/Cargo.toml').read_text())['package']['version'],
+                  ]
+                  if any(version != tag for version in versions):
+                      raise SystemExit('Package versions must match the tag')
+                  changelog = Path('CHANGELOG.md').read_text()
+                  match = re.search(rf'^## {re.escape(tag)} — \d{{4}}-\d{{2}}-\d{{2}}\n(.+?)(?=^## |\Z)', changelog, re.M | re.S)
+                  if not match or not match[1].strip():
+                      raise SystemExit('Expected dated release notes in CHANGELOG.md')
+                  Path('release-notes.md').write_text(match[1].strip() + '\n')
+                  PY
+                  cd release-assets
+                  arm="Patchbay-$RELEASE_TAG-macos-arm64.zip"
+                  intel="Patchbay-$RELEASE_TAG-macos-x86_64.zip"
+                  unzip -tq "$arm"
+                  unzip -tq "$intel"
+                  sha256sum "$arm" "$intel" > SHA256SUMS
+                  if gh release view "$RELEASE_TAG" --json isDraft --jq '.isDraft' | grep -qx false; then
+                      echo "Release $RELEASE_TAG is already published."
+                  else
+                      gh release create "$RELEASE_TAG" "$arm" "$intel" SHA256SUMS \
+                          --verify-tag --title "Patchbay $RELEASE_TAG" --notes-file ../release-notes.md --latest
+                  fi
+
+    homebrew:
+        needs: release
+        uses: ./.github/workflows/homebrew.yml
+        with:
+            version: ${{ github.ref_name }}
+        secrets:
+            HOMEBREW_TAP_SSH_KEY: ${{ secrets.HOMEBREW_TAP_SSH_KEY }}

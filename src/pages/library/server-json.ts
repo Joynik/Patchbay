@@ -1,3 +1,5 @@
+import { validArgument, validCommand, validServerName } from "./server-validation";
+
 type Fields = {
     name?: string;
     description?: string;
@@ -27,7 +29,7 @@ export function parseServerJson(source: string): Fields {
     const { name = key, description, type, command, args, url, ...extra } = object(config);
     if (
         Object.keys(extra).length ||
-        (name !== undefined && (typeof name !== "string" || !/^[a-zA-Z0-9_-]+$/.test(name))) ||
+        (name !== undefined && (typeof name !== "string" || !validServerName(name))) ||
         (description !== undefined && typeof description !== "string")
     ) {
         throw new Error();
@@ -40,20 +42,22 @@ export function parseServerJson(source: string): Fields {
         (type === undefined || type === "http" || type === "streamable-http")
     ) {
         const endpoint = new URL(url);
-        if (endpoint.protocol === "https:" || endpoint.protocol === "http:") {
+        if (
+            (endpoint.protocol === "https:" || endpoint.protocol === "http:") &&
+            !endpoint.username &&
+            !endpoint.password
+        ) {
             return { name, description, transport: "http", url };
         }
     }
     if (
         typeof command === "string" &&
-        command.trim() &&
+        validCommand(command) &&
         url === undefined &&
         (type === undefined || type === "stdio") &&
         (args === undefined ||
             (Array.isArray(args) &&
-                args.every(
-                    (arg) => typeof arg === "string" && arg.length > 0 && !/[\r\n]/.test(arg),
-                )))
+                args.every((arg) => typeof arg === "string" && validArgument(arg))))
     ) {
         return { name, description, transport: "stdio", command, args: args?.join("\n") };
     }

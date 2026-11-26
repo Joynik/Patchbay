@@ -1,13 +1,37 @@
 import { FileCog, GripVertical, Pencil } from "lucide-react";
-import { DropdownMenu } from "radix-ui";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { Action, Agent, Snapshot } from "../app/api";
-import { ActionMenu } from "../components/ui/ActionMenu";
 import { AgentIcon } from "../components/ui/AgentIcon";
 import { Modal } from "../components/ui/Modal";
 import { Switch } from "../components/ui/Switch";
 import type { Messages } from "../i18n";
+
+type DropTarget = { id: string; side: "before" | "after" };
+
+function targetAt(grid: HTMLElement, x: number, y: number): DropTarget | undefined {
+    const bounds = grid.getBoundingClientRect();
+    if (x < bounds.left || x > bounds.right || y < bounds.top || y > bounds.bottom) {
+        return undefined;
+    }
+
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>("[data-agent-card]"), (card) => ({
+        id: card.dataset.agentCard!,
+        rect: card.getBoundingClientRect(),
+    }));
+    if (cards.length === 0) {
+        return undefined;
+    }
+
+    // Pick the closest row first so the gaps between cards are also valid drop targets.
+    const distance = (rect: DOMRect) => Math.max(rect.top - y, y - rect.bottom, 0);
+    const closest = cards.reduce((best, card) =>
+        distance(card.rect) < distance(best.rect) ? card : best,
+    );
+    const row = cards.filter(({ rect }) => rect.top === closest.rect.top);
+    const next = row.find(({ rect }) => x < rect.left + rect.width / 2);
+    return next ? { id: next.id, side: "before" } : { id: row.at(-1)!.id, side: "after" };
+}
 
 export function Agents({
     data,
@@ -20,90 +44,125 @@ export function Agents({
     act: (action: Action) => Promise<boolean>;
     busy: boolean;
 }) {
-    const [showHidden, setShowHidden] = useState(false);
     const [editing, setEditing] = useState<Agent | null>(null);
     const [folder, setFolder] = useState("");
-    const [dragging, setDragging] = useState<string>();
-    const [dropTarget, setDropTarget] = useState<string>();
-    const visible = data.agents.filter((agent) => showHidden || !agent.hidden);
+    const grid = useRef<HTMLDivElement>(null);
+    const dragOrigin = useRef<{ x: number; y: number }>(null);
+    const [drag, setDrag] = useState<{ id: string; style?: { transform: string } }>();
+    const [dropTarget, setDropTarget] = useState<DropTarget>();
 
-    function move(agent: string, target: string) {
-        if (busy || agent === target) {
+    function endDrag() {
+        dragOrigin.current = null;
+        setDrag(undefined);
+        setDropTarget(undefined);
+    }
+
+    function move(agent: string, target: DropTarget) {
+        if (busy || agent === target.id) {
             return;
         }
         const ids = data.agents.map((item) => item.id);
-        const index = ids.indexOf(target);
-        ids.splice(ids.indexOf(agent), 1);
+        const original = ids.indexOf(agent);
+        ids.splice(original, 1);
+        const index = ids.indexOf(target.id) + Number(target.side === "after");
+        if (index === original) {
+            return;
+        }
         ids.splice(index, 0, agent);
         void act({ type: "agent_order", ids });
     }
 
     return (
         <div className="stack">
-            {data.agents.some((agent) => agent.hidden) && (
-                <label className="flex items-center gap-2">
-                    <input
-                        type="checkbox"
-                        checked={showHidden}
-                        onChange={(event) => setShowHidden(event.target.checked)}
-                    />
-                    {t.showHidden}
-                </label>
-            )}
-            <div className="agent-grid">
-                {visible.map((agent, index) => (
+            <div className="agent-grid" ref={grid}>
+                {data.agents.map((agent, index) => (
                     <div
-                        className="panel agent-card"
-                        data-drop-target={dropTarget === agent.id || undefined}
+                        className="agent-card"
+                        data-agent-card={agent.id}
+                        data-drop-target={dropTarget?.id === agent.id ? dropTarget.side : undefined}
                         key={agent.id}
-                        onDragOver={(event) => {
-                            if (dragging && dragging !== agent.id && !busy) {
-                                event.preventDefault();
-                                event.dataTransfer.dropEffect = "move";
-                                setDropTarget(agent.id);
-                            }
-                        }}
-                        onDragLeave={(event) => {
-                            if (
-                                !(event.relatedTarget instanceof Node) ||
-                                !event.currentTarget.contains(event.relatedTarget)
-                            ) {
-                                setDropTarget(undefined);
-                            }
-                        }}
-                        onDrop={(event) => {
-                            if (dragging) {
-                                event.preventDefault();
-                                move(dragging, agent.id);
-                                setDragging(undefined);
-                                setDropTarget(undefined);
-                            }
-                        }}
                     >
-                        <section aria-label={agent.name}>
+                        <section
+                            className="panel agent-card-content"
+                            aria-label={agent.name}
+                            data-dragging={drag?.id === agent.id || undefined}
+                            style={drag?.id === agent.id ? drag.style : undefined}
+                        >
                             <div className="agent-card-header">
                                 <button
                                     className="icon-button drag-handle"
-                                    draggable={!busy}
-                                    disabled={busy || visible.length < 2}
+                                    disabled={busy || data.agents.length < 2}
                                     aria-label={`${t.reorderAgent} · ${agent.name}`}
                                     title={t.reorderHint}
-                                    onDragStart={(event) => {
-                                        event.dataTransfer.effectAllowed = "move";
-                                        event.dataTransfer.setData("text/plain", agent.id);
-                                        setDragging(agent.id);
+                                    onPointerDown={(event) => {
+                                        if (event.button === 0 && event.isPrimary) {
+                                            event.currentTarget.setPointerCapture(event.pointerId);
+                                            dragOrigin.current = {
+                                                x: event.clientX,
+                                                y: event.clientY,
+                                            };
+                                            setDrag({ id: agent.id });
+                                        }
                                     }}
-                                    onDragEnd={() => {
-                                        setDragging(undefined);
-                                        setDropTarget(undefined);
+                                    onPointerMove={(event) => {
+                                        const origin = dragOrigin.current;
+                                        if (
+                                            origin &&
+                                            event.currentTarget.hasPointerCapture(
+                                                event.pointerId,
+                                            ) &&
+                                            grid.current
+                                        ) {
+                                            const x = event.clientX - origin.x;
+                                            const y = event.clientY - origin.y;
+                                            setDrag({
+                                                id: agent.id,
+                                                style: { transform: `translate(${x}px, ${y}px)` },
+                                            });
+                                            const target = targetAt(
+                                                grid.current,
+                                                event.clientX,
+                                                event.clientY,
+                                            );
+                                            setDropTarget(
+                                                target?.id !== agent.id ? target : undefined,
+                                            );
+                                        }
                                     }}
+                                    onPointerUp={(event) => {
+                                        if (
+                                            event.currentTarget.hasPointerCapture(
+                                                event.pointerId,
+                                            ) &&
+                                            grid.current
+                                        ) {
+                                            const target = targetAt(
+                                                grid.current,
+                                                event.clientX,
+                                                event.clientY,
+                                            );
+                                            if (target) {
+                                                move(agent.id, target);
+                                            }
+                                        }
+                                    }}
+                                    onPointerCancel={endDrag}
+                                    onLostPointerCapture={endDrag}
                                     onKeyDown={(event) => {
                                         if (event.key === "ArrowUp" || event.key === "ArrowDown") {
                                             event.preventDefault();
                                             const target =
-                                                visible[index + (event.key === "ArrowUp" ? -1 : 1)];
+                                                data.agents[
+                                                    index + (event.key === "ArrowUp" ? -1 : 1)
+                                                ];
                                             if (target) {
-                                                move(agent.id, target.id);
+                                                move(agent.id, {
+                                                    id: target.id,
+                                                    side:
+                                                        event.key === "ArrowUp"
+                                                            ? "before"
+                                                            : "after",
+                                                });
                                             }
                                         }
                                     }}
@@ -111,7 +170,7 @@ export function Agents({
                                     <GripVertical size={16} />
                                 </button>
                                 <AgentIcon id={agent.id} />
-                                <h2>{agent.name}</h2>
+                                <h3>{agent.name}</h3>
                                 <Switch
                                     checked={agent.enabled}
                                     disabled={busy || (!agent.folder && !agent.enabled)}
@@ -137,20 +196,6 @@ export function Agents({
                                 >
                                     <Pencil size={15} />
                                 </button>
-                                <ActionMenu label={agent.name + " · " + t.actions} disabled={busy}>
-                                    <DropdownMenu.Item
-                                        className="select-option"
-                                        onSelect={() =>
-                                            void act({
-                                                type: "hide",
-                                                agent: agent.id,
-                                                hidden: !agent.hidden,
-                                            })
-                                        }
-                                    >
-                                        {agent.hidden ? t.reveal : t.hide}
-                                    </DropdownMenu.Item>
-                                </ActionMenu>
                             </div>
                             {agent.config_file && (
                                 <p className="agent-config path" title={agent.config_file}>

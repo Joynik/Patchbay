@@ -1,4 +1,4 @@
-import { Cable, Pencil, Plus, Trash2 } from "lucide-react";
+import { Cable, Pencil, Plus, Trash2, Unplug } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
 import type { Action, Connection, Server, Snapshot } from "../app/api";
@@ -7,6 +7,7 @@ import { Modal } from "../components/ui/Modal";
 import { Switch } from "../components/ui/Switch";
 import type { Messages } from "../i18n";
 import { DiscoveredServers } from "./library/DiscoveredServers";
+import { parseArguments, validArgument, validCommand } from "./library/server-validation";
 import { ServerFields } from "./library/ServerFields";
 
 export function Library({
@@ -20,36 +21,67 @@ export function Library({
     act: (action: Action) => Promise<boolean>;
     busy: boolean;
 }) {
-    const [dialog, setDialog] = useState<"add" | "edit" | "remove" | null>(null);
+    const [dialog, setDialog] = useState<"add" | "edit" | "remove" | "release" | null>(null);
     const [server, setServer] = useState<Server | null>(null);
-    const agents = data.agents.filter((agent) => !agent.hidden);
+    const agents = data.agents.filter((agent) => agent.enabled);
+    const byName = new Intl.Collator(data.locale, { sensitivity: "base", numeric: true });
+    // eslint-disable-next-line unicorn/no-array-sort -- toSorted is outside the current TypeScript target.
+    const servers = [...data.servers].sort((first, second) =>
+        byName.compare(first.name, second.name),
+    );
+
+    const confirmation = dialog === "remove" || dialog === "release";
+    const title =
+        dialog === "edit"
+            ? t.edit
+            : dialog === "remove"
+              ? t.remove
+              : dialog === "release"
+                ? t.release
+                : t.add;
 
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        const fields = new FormData(event.currentTarget);
+        const form = event.currentTarget;
+        const fields = new FormData(form);
         const field = (key: string) => String(fields.get(key) ?? "");
         let action: Action;
-        if (dialog === "edit" && server) {
-            action = { type: "describe", server: server.id, description: field("description") };
-        } else if (dialog === "remove" && server) {
-            action = { type: "remove", server: server.id };
+        if (confirmation && server) {
+            action = { type: dialog, server: server.id };
         } else {
+            const original = dialog === "edit" ? server?.connection : undefined;
+            const inputArgs = field("args");
+            const command = field("command");
+            const originalStdio = original?.type === "stdio" ? original : undefined;
+            const keptArgs = originalStdio && inputArgs === originalStdio.args.join("\n");
+            const args = keptArgs ? originalStdio.args : parseArguments(inputArgs);
+            if (field("transport") !== "http") {
+                if (command !== originalStdio?.command && !validCommand(command)) {
+                    const input = form.querySelector<HTMLInputElement>('input[name="command"]');
+                    input?.setCustomValidity(t.invalidServerCommand);
+                    input?.reportValidity();
+                    return;
+                }
+                if (!keptArgs && !args.every(validArgument)) {
+                    const input = form.querySelector<HTMLTextAreaElement>('textarea[name="args"]');
+                    input?.setCustomValidity(t.invalidServerArgs);
+                    input?.reportValidity();
+                    return;
+                }
+            }
             const connection: Connection =
                 field("transport") === "http"
                     ? { type: "http", url: field("url").trim() }
                     : {
                           type: "stdio",
-                          command: field("command").trim(),
-                          args: field("args")
-                              .split(/\r?\n/)
-                              .filter((arg) => arg !== ""),
+                          command,
+                          args,
                       };
-            action = {
-                type: "add",
-                name: field("name"),
-                description: field("description"),
-                connection,
-            };
+            const values = { name: field("name"), description: field("description"), connection };
+            action =
+                dialog === "edit" && server
+                    ? { type: "edit", server: server.id, ...values }
+                    : { type: "add", ...values };
         }
         if (await act(action)) {
             setDialog(null);
@@ -93,17 +125,14 @@ export function Library({
                                 </tr>
                             </thead>
                             <tbody>
-                                {data.servers.map((item) => (
+                                {servers.map((item) => (
                                     <tr key={item.id}>
                                         <th scope="row">{item.name}</th>
                                         <td
                                             className="server-description"
                                             title={item.description || undefined}
                                         >
-                                            {item.description ||
-                                                (item.connection.type === "http"
-                                                    ? "Streamable HTTP"
-                                                    : "stdio")}
+                                            {item.description}
                                         </td>
                                         <td>
                                             <div className="agent-assignments">
@@ -119,7 +148,6 @@ export function Library({
                                                         title={agent.name}
                                                         disabled={
                                                             busy ||
-                                                            !agent.enabled ||
                                                             !agent.folder ||
                                                             (!agent.supports_http &&
                                                                 item.connection.type === "http")
@@ -172,6 +200,18 @@ export function Library({
                                                 <button
                                                     className="icon-button"
                                                     disabled={busy}
+                                                    title={t.release}
+                                                    aria-label={t.release}
+                                                    onClick={() => {
+                                                        setServer(item);
+                                                        setDialog("release");
+                                                    }}
+                                                >
+                                                    <Unplug size={15} />
+                                                </button>
+                                                <button
+                                                    className="icon-button"
+                                                    disabled={busy}
                                                     title={t.remove}
                                                     aria-label={t.remove}
                                                     onClick={() => {
@@ -190,9 +230,19 @@ export function Library({
                     </div>
                 )}
             </section>
-            <DiscoveredServers agents={data.agents} t={t} busy={busy} act={act} />
+            <DiscoveredServers
+                agents={data.agents}
+                servers={data.servers}
+                t={t}
+                busy={busy}
+                act={act}
+                editServer={(item) => {
+                    setServer(item);
+                    setDialog("edit");
+                }}
+            />
             <Modal
-                wide={dialog === "add"}
+                wide={!confirmation}
                 open={dialog !== null}
                 setOpen={(open) => {
                     if (!open) {
@@ -200,23 +250,30 @@ export function Library({
                     }
                 }}
                 closeLabel={t.close}
-                title={dialog === "edit" ? t.edit : dialog === "remove" ? t.remove : t.add}
+                title={title}
             >
-                <form key={dialog} className="stack mt-4" onSubmit={submit}>
-                    {dialog === "add" && <ServerFields t={t} busy={busy} />}
-                    {dialog === "remove" ? (
-                        <p>{t.confirmRemove}</p>
+                <form
+                    key={dialog}
+                    className="stack mt-4"
+                    onSubmit={submit}
+                    onInput={(event) => {
+                        const input = event.target;
+                        if (
+                            input instanceof HTMLInputElement ||
+                            input instanceof HTMLTextAreaElement
+                        ) {
+                            input.setCustomValidity("");
+                        }
+                    }}
+                >
+                    {confirmation ? (
+                        <p>{dialog === "release" ? t.confirmRelease : t.confirmRemove}</p>
                     ) : (
-                        dialog === "edit" && (
-                            <label className="field">
-                                {t.description}
-                                <textarea
-                                    name="description"
-                                    defaultValue={server?.description}
-                                    rows={2}
-                                />
-                            </label>
-                        )
+                        <ServerFields
+                            t={t}
+                            busy={busy}
+                            server={dialog === "edit" ? (server ?? undefined) : undefined}
+                        />
                     )}
                     <div className="actions">
                         <button type="button" className="button" onClick={() => setDialog(null)}>
@@ -226,7 +283,7 @@ export function Library({
                             className={dialog === "remove" ? "button danger" : "button primary"}
                             disabled={busy}
                         >
-                            {dialog === "remove" ? t.remove : t.save}
+                            {confirmation ? title : t.save}
                         </button>
                     </div>
                 </form>

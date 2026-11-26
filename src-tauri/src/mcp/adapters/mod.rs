@@ -2,17 +2,25 @@ mod antigravity;
 mod claude_code;
 mod claude_desktop;
 mod codex;
+mod deepseek_harness;
+mod gemini;
+mod hermes;
+mod oh_my_pi;
 mod opencode;
 mod pi;
+mod yaml;
 
 use super::Connection;
 use jsonc_parser::{
     ParseOptions,
-    cst::{CstInputValue, CstRootNode},
+    cst::{CstContainerNode, CstInputValue, CstNode, CstObject, CstRootNode},
     parse_to_serde_value,
 };
 use serde_json::{Map, Value, json};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Path, PathBuf},
+};
 
 pub type Entries = Map<String, Value>;
 
@@ -39,6 +47,10 @@ pub fn get(id: &str) -> Result<&'static dyn Adapter, String> {
         "codex" => Ok(&codex::Codex),
         "opencode" => Ok(&opencode::OpenCode),
         "pi" => Ok(&pi::Pi),
+        "gemini" => Ok(&gemini::Gemini),
+        "oh_my_pi" => Ok(&oh_my_pi::OhMyPi),
+        "hermes" => Ok(&hermes::Hermes),
+        "deepseek_harness" => Ok(&deepseek_harness::DeepSeekHarness),
         _ => Err(format!("Unknown adapter: {id}")),
     }
 }
@@ -58,10 +70,41 @@ fn parse_options() -> ParseOptions {
     }
 }
 
+fn check_json_keys(object: &CstObject) -> Result<(), String> {
+    let mut names = BTreeSet::new();
+    for property in object.properties() {
+        let name = property
+            .decoded_name()
+            .ok_or("Invalid JSON property name")?;
+        if !names.insert(name) {
+            return Err("Duplicate JSON keys cannot be edited safely".into());
+        }
+        check_json_value(property.value().ok_or("Missing JSON property value")?)?;
+    }
+    Ok(())
+}
+
+fn check_json_value(value: CstNode) -> Result<(), String> {
+    match value {
+        CstNode::Container(CstContainerNode::Object(object)) => check_json_keys(&object),
+        CstNode::Container(CstContainerNode::Array(array)) => {
+            array.elements().into_iter().try_for_each(check_json_value)
+        }
+        _ => Ok(()),
+    }
+}
+
 fn json_document(source: &str) -> Result<Entries, String> {
     if source.is_empty() {
         return Ok(Map::new());
     }
+    let root =
+        CstRootNode::parse(source, &parse_options()).map_err(|_| "Invalid JSON configuration")?;
+    check_json_keys(
+        &root
+            .object_value()
+            .ok_or("Expected a configuration object")?,
+    )?;
     parse_to_serde_value(source, &parse_options())
         .map_err(|error| format!("Invalid JSON configuration: {error}"))
 }
@@ -102,6 +145,7 @@ fn update_json_path(
     let mut entries = root
         .object_value()
         .ok_or("Expected a configuration object")?;
+    check_json_keys(&entries)?;
     for section in sections {
         entries = entries
             .object_value_or_create(section)

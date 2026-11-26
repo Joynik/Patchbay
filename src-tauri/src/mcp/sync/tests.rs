@@ -27,8 +27,9 @@ fn adopts_codex_toggles_and_restores_after_reopening() {
 
     let snapshot = workspace
         .change(Action::Adopt {
-            agent: "codex".into(),
+            agents: vec!["codex".into()],
             key: "existing".into(),
+            expected: None,
         })
         .unwrap();
     assert_eq!(fs::read_to_string(&file).unwrap(), original);
@@ -71,8 +72,9 @@ fn preserves_a_manual_edit_and_reports_conflict() {
     fs::write(&file, "[mcp_servers.example]\ncommand = 'original'\n").unwrap();
     let snapshot = workspace
         .change(Action::Adopt {
-            agent: "codex".into(),
+            agents: vec!["codex".into()],
             key: "example".into(),
+            expected: None,
         })
         .unwrap();
     let id = snapshot.servers[0].id.clone();
@@ -217,7 +219,11 @@ fn restores_text_size_and_agent_order_from_local_settings() {
     workspace.reload().unwrap();
 
     let snapshot = workspace.snapshot();
-    assert_eq!(snapshot.text_size, super::super::TextSize::Default);
+    assert_eq!(snapshot.text_size, super::super::TextSize::Small);
+    assert_eq!(
+        serde_json::from_str::<super::super::TextSize>(r#""extra_large""#).unwrap(),
+        super::super::TextSize::Large
+    );
     let codex = snapshot
         .agents
         .iter()
@@ -267,4 +273,470 @@ fn restores_text_size_and_agent_order_from_local_settings() {
         ids
     );
     assert!(!config_file.exists());
+}
+
+#[test]
+fn new_adapters_change_only_the_managed_entry() {
+    let cases = [
+        (
+            "gemini",
+            "settings.json",
+            "{\n  \"theme\": \"dark\",\n  \"mcpServers\": { \"foreign\": { \"command\": \"other\" } }\n}\n",
+            "\"theme\": \"dark\"",
+        ),
+        (
+            "oh_my_pi",
+            "mcp.json",
+            "{\n  \"unrelated\": true,\n  \"mcpServers\": { \"foreign\": { \"command\": \"other\" } }\n}\n",
+            "\"unrelated\": true",
+        ),
+        (
+            "hermes",
+            "config.yaml",
+            "# leave this alone\nmodel: example\nmcp_servers:\n  foreign:\n    command: other\n",
+            "# leave this alone\nmodel: example",
+        ),
+        (
+            "deepseek_harness",
+            "cordis.patch.yml",
+            "# leave this alone\n- id: mcp\n  config:\n    servers:\n      foreign:\n        transport: stdio\n        command: other\n",
+            "# leave this alone\n- id: mcp",
+        ),
+    ];
+
+    for (agent, config_file, original, marker) in cases {
+        let root = tempfile::tempdir().unwrap();
+        let folder = root.path().join("agent");
+        fs::create_dir(&folder).unwrap();
+        let path = folder.join(config_file);
+        fs::write(&path, original).unwrap();
+        let mut workspace = Workspace::open(root.path().into(), root.path().join("data")).unwrap();
+        workspace
+            .change(Action::Folder {
+                agent: agent.into(),
+                folder: Some(folder),
+            })
+            .unwrap();
+        workspace
+            .change(Action::Manage {
+                agent: agent.into(),
+                enabled: true,
+            })
+            .unwrap();
+        let snapshot = workspace
+            .change(Action::Add {
+                name: "patchbay-test".into(),
+                description: String::new(),
+                connection: Connection::Http {
+                    url: "https://example.test/mcp".into(),
+                },
+            })
+            .unwrap();
+        let id = snapshot.servers[0].id.clone();
+        let snapshot = workspace
+            .change(Action::Assign {
+                server: id.clone(),
+                agent: agent.into(),
+                enabled: true,
+            })
+            .unwrap();
+        assert!(
+            snapshot.issues.is_empty(),
+            "{agent}: {:?}",
+            snapshot
+                .issues
+                .iter()
+                .map(|issue| &issue.message)
+                .collect::<Vec<_>>()
+        );
+        let added = fs::read_to_string(&path).unwrap();
+        assert!(added.contains(marker), "{agent}: {added}");
+        assert!(added.contains("patchbay-test"), "{agent}: {added}");
+        let adapter = adapters::get(agent).unwrap();
+        let before = adapter.read(original).unwrap();
+        assert_eq!(
+            adapter.read(&added).unwrap().get("foreign"),
+            before.get("foreign")
+        );
+
+        let snapshot = workspace.change(Action::Remove { server: id }).unwrap();
+        assert!(snapshot.issues.is_empty(), "{agent}");
+        let removed = fs::read_to_string(&path).unwrap();
+        assert!(removed.contains(marker), "{agent}: {removed}");
+        assert_eq!(adapter.read(&removed).unwrap(), before, "{agent}");
+        if agent == "deepseek_harness" {
+            assert_eq!(removed, original);
+        }
+
+        let conflicting = workspace
+            .change(Action::Add {
+                name: "foreign".into(),
+                description: String::new(),
+                connection: Connection::Stdio {
+                    command: "new".into(),
+                    args: vec![],
+                },
+            })
+            .unwrap();
+        let snapshot = workspace
+            .change(Action::Assign {
+                server: conflicting.servers[0].id.clone(),
+                agent: agent.into(),
+                enabled: true,
+            })
+            .unwrap();
+        assert_eq!(snapshot.issues.len(), 1, "{agent}");
+        assert_eq!(fs::read_to_string(&path).unwrap(), removed, "{agent}");
+    }
+}
+
+#[test]
+fn new_adapters_refuse_ambiguous_configuration() {
+    for (agent, source) in [
+        (
+            "gemini",
+            r#"{"mcpServers":{"foreign":{"command":"one"},"foreign":{"command":"two"}}}"#,
+        ),
+        (
+            "hermes",
+            "mcp_servers:\n  foreign: {command: one}\n  foreign: {command: two}\n",
+        ),
+        ("hermes", "mcp_servers: ["),
+        ("deepseek_harness", "config: {servers: {}}"),
+    ] {
+        let adapter = adapters::get(agent).unwrap();
+        assert!(adapter.read(source).is_err(), "{agent}");
+        assert!(adapter.update(source, "foreign", None).is_err(), "{agent}");
+    }
+}
+
+#[test]
+fn refuses_to_manage_a_shared_pi_file_twice() {
+    let root = tempfile::tempdir().unwrap();
+    let folder = root.path().join(".pi/agent");
+    fs::create_dir_all(&folder).unwrap();
+    let path = folder.join("mcp.json");
+    let original = r#"{"mcpServers":{"foreign":{"command":"keep"}}}"#;
+    fs::write(&path, original).unwrap();
+
+    let mut workspace = Workspace::open(root.path().into(), root.path().join("data")).unwrap();
+    workspace
+        .change(Action::Folder {
+            agent: "pi".into(),
+            folder: Some(folder.clone()),
+        })
+        .unwrap();
+    workspace
+        .change(Action::Folder {
+            agent: "oh_my_pi".into(),
+            folder: Some(folder),
+        })
+        .unwrap();
+    workspace
+        .change(Action::Manage {
+            agent: "pi".into(),
+            enabled: true,
+        })
+        .unwrap();
+    assert!(
+        workspace
+            .change(Action::Manage {
+                agent: "oh_my_pi".into(),
+                enabled: true
+            })
+            .err()
+            .unwrap()
+            .contains("shared with Pi")
+    );
+    assert!(
+        workspace
+            .change(Action::Adopt {
+                agents: vec!["oh_my_pi".into()],
+                key: "foreign".into(),
+                expected: None,
+            })
+            .is_err()
+    );
+    assert_eq!(fs::read_to_string(path).unwrap(), original);
+}
+
+#[test]
+fn ignores_retired_agent_assignments_without_changing_pi_configuration() {
+    let (root, file, mut workspace) = fixture();
+    fs::write(file, "[mcp_servers.example]\ncommand = 'keep'\n").unwrap();
+    workspace
+        .change(Action::Adopt {
+            agents: vec!["codex".into()],
+            key: "example".into(),
+            expected: None,
+        })
+        .unwrap();
+
+    let pi_folder = root.path().join(".pi/agent");
+    fs::create_dir_all(&pi_folder).unwrap();
+    let pi_config = pi_folder.join("mcp.json");
+    let original = r#"{"mcpServers":{"example":{"command":"keep"}}}"#;
+    fs::write(&pi_config, original).unwrap();
+
+    let server = &mut workspace.library.servers[0];
+    server.agents.insert("thinkrail".into());
+    let id = server.id.clone();
+    storage::save(&workspace.data.join("library.json"), &workspace.library).unwrap();
+
+    let snapshot = workspace.change(Action::Remove { server: id }).unwrap();
+    assert!(snapshot.servers.is_empty());
+    assert!(snapshot.issues.is_empty());
+    assert!(snapshot.agents.iter().all(|agent| agent.id != "thinkrail"));
+    assert_eq!(fs::read_to_string(pi_config).unwrap(), original);
+}
+
+#[test]
+fn adopts_all_matching_sources_without_rewriting_agent_files() {
+    let (root, codex_file, mut workspace) = fixture();
+    let gemini_folder = root.path().join(".gemini");
+    fs::create_dir(&gemini_folder).unwrap();
+    let gemini_file = gemini_folder.join("settings.json");
+    let original_codex = "[mcp_servers.example]\ncommand = 'keep'\n";
+    let original_gemini = r#"{"mcpServers":{"example":{"command":"keep"}}}"#;
+    let different_gemini = r#"{"mcpServers":{"example":{"command":"other"}}}"#;
+    fs::write(&codex_file, original_codex).unwrap();
+    fs::write(&gemini_file, different_gemini).unwrap();
+    workspace
+        .change(Action::Folder {
+            agent: "gemini".into(),
+            folder: Some(gemini_folder),
+        })
+        .unwrap();
+
+    let adopt = || Action::Adopt {
+        agents: vec!["codex".into(), "gemini".into()],
+        key: "example".into(),
+        expected: None,
+    };
+    assert!(workspace.change(adopt()).is_err());
+    assert!(workspace.snapshot().servers.is_empty());
+    assert!(workspace.applied.is_empty());
+    assert_eq!(fs::read_to_string(&codex_file).unwrap(), original_codex);
+    assert_eq!(fs::read_to_string(&gemini_file).unwrap(), different_gemini);
+
+    fs::write(&gemini_file, original_gemini).unwrap();
+    let stale = workspace.change(Action::Adopt {
+        agents: vec!["codex".into(), "gemini".into()],
+        key: "example".into(),
+        expected: Some(Connection::Stdio {
+            command: "outdated".into(),
+            args: vec![],
+        }),
+    });
+    assert!(matches!(stale, Err(error) if error.contains("changed after comparison")));
+    assert!(workspace.snapshot().servers.is_empty());
+
+    let snapshot = workspace.change(adopt()).unwrap();
+    assert_eq!(snapshot.servers.len(), 1);
+    let server = &snapshot.servers[0];
+    assert_eq!(
+        server.agents,
+        BTreeSet::from(["codex".into(), "gemini".into()])
+    );
+    assert_eq!(fs::read_to_string(&codex_file).unwrap(), original_codex);
+    assert_eq!(fs::read_to_string(&gemini_file).unwrap(), original_gemini);
+
+    workspace
+        .change(Action::Global {
+            server: server.id.clone(),
+            enabled: false,
+        })
+        .unwrap();
+    assert!(!fs::read_to_string(&codex_file).unwrap().contains("example"));
+    assert!(
+        !fs::read_to_string(&gemini_file)
+            .unwrap()
+            .contains("example")
+    );
+}
+
+#[test]
+fn adopts_active_source_into_disabled_server_without_enabling_other_agents() {
+    let (root, codex_file, mut workspace) = fixture();
+    let gemini_folder = root.path().join(".gemini");
+    fs::create_dir(&gemini_folder).unwrap();
+    let gemini_file = gemini_folder.join("settings.json");
+    let disabled_codex = "[mcp_servers.example]\ncommand = 'keep'\nenabled = false\n";
+    let enabled_gemini = r#"{"mcpServers":{"example":{"command":"keep"}}}"#;
+    fs::write(&codex_file, disabled_codex).unwrap();
+    fs::write(&gemini_file, enabled_gemini).unwrap();
+
+    let snapshot = workspace
+        .change(Action::Adopt {
+            agents: vec!["codex".into()],
+            key: "example".into(),
+            expected: None,
+        })
+        .unwrap();
+    assert!(!snapshot.servers[0].enabled);
+    assert!(workspace.refresh().unwrap().issues.is_empty());
+
+    let snapshot = workspace
+        .change(Action::Adopt {
+            agents: vec!["gemini".into()],
+            key: "example".into(),
+            expected: None,
+        })
+        .unwrap();
+    assert!(snapshot.servers[0].enabled);
+    assert_eq!(
+        snapshot.servers[0].agents,
+        BTreeSet::from(["gemini".into()])
+    );
+    assert!(workspace.refresh().unwrap().issues.is_empty());
+    assert_eq!(fs::read_to_string(&codex_file).unwrap(), disabled_codex);
+    assert_eq!(fs::read_to_string(&gemini_file).unwrap(), enabled_gemini);
+}
+
+#[test]
+fn edits_an_adopted_connection_and_preserves_other_entries_and_native_options() {
+    let (_root, file, mut workspace) = fixture();
+    fs::write(
+        &file,
+        "# keep this\nmodel = 'example'\n\n[mcp_servers.example]\ncommand = 'old'\nenv = { MODE = 'keep' }\n\n[mcp_servers.other]\ncommand = 'untouched'\n",
+    )
+    .unwrap();
+    let snapshot = workspace
+        .change(Action::Adopt {
+            agents: vec!["codex".into()],
+            key: "example".into(),
+            expected: None,
+        })
+        .unwrap();
+    let id = snapshot.servers[0].id.clone();
+    let snapshot = workspace
+        .change(Action::Edit {
+            server: id.clone(),
+            name: "new-display-name".into(),
+            description: "Updated".into(),
+            connection: Connection::Stdio {
+                command: "new".into(),
+                args: vec!["--flag".into()],
+            },
+        })
+        .unwrap();
+    assert!(snapshot.issues.is_empty());
+    assert_eq!(snapshot.servers[0].name, "new-display-name");
+    assert_eq!(snapshot.servers[0].key, "example");
+    let source = fs::read_to_string(&file).unwrap();
+    assert!(source.contains("# keep this"));
+    assert!(source.contains("command = 'untouched'"));
+    let adapter = adapters::get("codex").unwrap();
+    let entries = adapter.read(&source).unwrap();
+    assert_eq!(entries["example"]["command"], "new");
+    assert_eq!(entries["example"]["args"], json!(["--flag"]));
+    assert_eq!(entries["example"]["env"]["MODE"], "keep");
+
+    assert!(
+        workspace
+            .change(Action::Edit {
+                server: id,
+                name: "new-display-name".into(),
+                description: "Updated".into(),
+                connection: Connection::Http {
+                    url: "https://example.test/mcp".into()
+                },
+            })
+            .is_err()
+    );
+    assert_eq!(fs::read_to_string(file).unwrap(), source);
+    assert!(workspace.refresh().unwrap().issues.is_empty());
+}
+
+#[test]
+fn removes_confirmed_discoveries_without_changing_managed_or_neighbor_entries() {
+    let (root, codex_file, mut workspace) = fixture();
+    let gemini_folder = root.path().join(".gemini");
+    let pi_folder = root.path().join(".pi/agent");
+    fs::create_dir(&gemini_folder).unwrap();
+    fs::create_dir_all(&pi_folder).unwrap();
+    let gemini_file = gemini_folder.join("settings.json");
+    let pi_file = pi_folder.join("mcp.json");
+    let codex_source = "# keep\nmodel = 'keep'\n\n[mcp_servers.example]\ncommand = 'codex-copy'\n\n[mcp_servers.other]\ncommand = 'keep'\n";
+    let gemini_source = r#"{"theme":"keep","mcpServers":{"example":{"command":"gemini-copy"},"other":{"command":"keep"}}}"#;
+    let pi_source = r#"{"mcpServers":{"example":{"command":"managed-copy"}}}"#;
+    fs::write(&codex_file, codex_source).unwrap();
+    fs::write(&gemini_file, gemini_source).unwrap();
+    fs::write(&pi_file, pi_source).unwrap();
+    workspace
+        .change(Action::Adopt {
+            agents: vec!["pi".into()],
+            key: "example".into(),
+            expected: None,
+        })
+        .unwrap();
+
+    let remove = |snapshot: &Snapshot| Action::RemoveDiscovered {
+        key: "example".into(),
+        targets: ["codex", "gemini"]
+            .into_iter()
+            .map(|id| {
+                let agent = snapshot.agents.iter().find(|agent| agent.id == id).unwrap();
+                let entry = agent
+                    .discovered
+                    .iter()
+                    .find(|entry| entry.key == "example")
+                    .unwrap();
+                DiscoveredTarget {
+                    agent: id.into(),
+                    revision: entry.revision.clone(),
+                }
+            })
+            .collect(),
+    };
+    let confirmed = workspace.snapshot();
+    let changed = gemini_source.replace("gemini-copy", "changed-copy");
+    fs::write(&gemini_file, &changed).unwrap();
+    assert!(workspace.change(remove(&confirmed)).is_err());
+    assert_eq!(fs::read_to_string(&codex_file).unwrap(), codex_source);
+    assert_eq!(fs::read_to_string(&gemini_file).unwrap(), changed);
+
+    let refreshed = workspace.refresh().unwrap();
+    let snapshot = workspace.change(remove(&refreshed)).unwrap();
+    assert_eq!(snapshot.servers.len(), 1);
+    assert_eq!(fs::read_to_string(&pi_file).unwrap(), pi_source);
+    let codex_result = fs::read_to_string(codex_file).unwrap();
+    let gemini_result = fs::read_to_string(gemini_file).unwrap();
+    assert!(!codex_result.contains("example"));
+    assert!(codex_result.contains("# keep"));
+    assert!(codex_result.contains("[mcp_servers.other]"));
+    assert!(!gemini_result.contains("example"));
+    assert!(gemini_result.contains("\"theme\":\"keep\""));
+    assert!(gemini_result.contains("\"other\""));
+}
+
+#[test]
+fn releases_a_managed_server_for_rediscovery_without_writing_agent_files() {
+    let (root, file, mut workspace) = fixture();
+    let original = "# keep\nmodel = 'example'\n\n[mcp_servers.example]\ncommand = 'keep'\n";
+    fs::write(&file, original).unwrap();
+    let adopt = || Action::Adopt {
+        agents: vec!["codex".into()],
+        key: "example".into(),
+        expected: None,
+    };
+    let managed = workspace.change(adopt()).unwrap();
+    assert!(managed.agents[0].discovered.is_empty());
+
+    let server = managed.servers[0].id.clone();
+    let released = workspace
+        .change(Action::Release {
+            server: server.clone(),
+        })
+        .unwrap();
+    assert!(released.servers.is_empty());
+    assert!(!workspace.applied.contains_key(&server));
+    assert_eq!(released.agents[0].discovered[0].key, "example");
+    assert!(released.agents[0].enabled);
+    assert_eq!(fs::read_to_string(&file).unwrap(), original);
+
+    let mut reopened = Workspace::open(root.path().into(), root.path().join("patchbay")).unwrap();
+    assert!(reopened.snapshot().servers.is_empty());
+    assert_eq!(reopened.change(adopt()).unwrap().servers.len(), 1);
+    assert_eq!(fs::read_to_string(file).unwrap(), original);
 }

@@ -1,0 +1,11 @@
+id = "gemini"
+name = "Gemini CLI"
+adapter = "gemini"
+
+[[paths.macos]]
+root = "$ENV:GEMINI_CLI_HOME"
+folder = ".gemini"
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".gemini"

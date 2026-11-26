@@ -1,0 +1,7 @@
+id = "oh_my_pi"
+name = "Oh My Pi"
+adapter = "oh_my_pi"
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".omp/agent"

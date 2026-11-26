@@ -25,6 +25,10 @@ const CONFIGS: &[&str] = &[
     include_str!("../../resources/agents/pi.toml"),
     include_str!("../../resources/agents/antigravity.toml"),
     include_str!("../../resources/agents/opencode.toml"),
+    include_str!("../../resources/agents/gemini.toml"),
+    include_str!("../../resources/agents/oh_my_pi.toml"),
+    include_str!("../../resources/agents/hermes.toml"),
+    include_str!("../../resources/agents/deepseek_harness.toml"),
 ];
 
 pub fn definitions() -> Result<Vec<Definition>, String> {

@@ -1,22 +1,27 @@
 import { Braces } from "lucide-react";
 import { useRef, useState } from "react";
 
+import type { Server } from "../../app/api";
 import { Select } from "../../components/ui/Select";
 import type { Messages } from "../../i18n";
 import { parseServerJson } from "./server-json";
+import { serverNamePattern } from "./server-validation";
 
 const transports: [string, string][] = [
     ["stdio", "stdio"],
     ["http", "Streamable HTTP"],
 ];
 
-export function ServerFields({ t, busy }: { t: Messages; busy: boolean }) {
-    const [name, setName] = useState("");
-    const [description, setDescription] = useState("");
-    const [transport, setTransport] = useState("stdio");
-    const [command, setCommand] = useState("");
-    const [args, setArgs] = useState("");
-    const [url, setUrl] = useState("");
+export function ServerFields({ t, busy, server }: { t: Messages; busy: boolean; server?: Server }) {
+    const connection = server?.connection;
+    const [name, setName] = useState(server?.name ?? "");
+    const [description, setDescription] = useState(server?.description ?? "");
+    const [transport, setTransport] = useState<string>(connection?.type ?? "stdio");
+    const [command, setCommand] = useState(connection?.type === "stdio" ? connection.command : "");
+    const [args, setArgs] = useState(
+        connection?.type === "stdio" ? connection.args.join("\n") : "",
+    );
+    const [url, setUrl] = useState(connection?.type === "http" ? connection.url : "");
     const [source, setSource] = useState("");
     const [invalid, setInvalid] = useState(false);
     const importPanel = useRef<HTMLDetailsElement>(null);
@@ -35,6 +40,12 @@ export function ServerFields({ t, busy }: { t: Messages; busy: boolean }) {
                 setArgs(fields.args ?? "");
             }
             setInvalid(false);
+            for (const field of ["command", "args"]) {
+                const input = nameInput.current?.form?.elements.namedItem(field);
+                if (input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement) {
+                    input.setCustomValidity("");
+                }
+            }
             if (importPanel.current) {
                 importPanel.current.open = false;
             }
@@ -88,7 +99,8 @@ export function ServerFields({ t, busy }: { t: Messages; busy: boolean }) {
                         ref={nameInput}
                         name="name"
                         required
-                        pattern="[a-zA-Z0-9_\-]+"
+                        pattern={name === server?.name ? undefined : serverNamePattern}
+                        title={t.invalidServerName}
                         value={name}
                         onChange={(event) => setName(event.target.value)}
                     />

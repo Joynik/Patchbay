@@ -13,7 +13,7 @@ export interface Server {
     agents: string[];
 }
 
-export type TextSize = "small" | "default" | "large" | "extra_large";
+export type TextSize = "small" | "default" | "large";
 
 export interface Agent {
     id: string;
@@ -22,9 +22,13 @@ export interface Agent {
     override_folder: string | null;
     config_file: string | null;
     enabled: boolean;
-    hidden: boolean;
     supports_http: boolean;
-    discovered: { key: string; supported: boolean }[];
+    discovered: {
+        key: string;
+        supported: boolean;
+        connection?: Connection | null;
+        revision?: string;
+    }[];
     applied: number;
     error: string | null;
 }
@@ -40,14 +44,15 @@ export interface Snapshot {
 
 export type Action =
     | { type: "add"; name: string; description: string; connection: Connection }
-    | { type: "describe"; server: string; description: string }
+    | { type: "edit"; server: string; name: string; description: string; connection: Connection }
     | { type: "remove"; server: string }
+    | { type: "release"; server: string }
     | { type: "global"; server: string; enabled: boolean }
     | { type: "assign"; server: string; agent: string; enabled: boolean }
     | { type: "manage"; agent: string; enabled: boolean }
-    | { type: "hide"; agent: string; hidden: boolean }
     | { type: "folder"; agent: string; folder: string | null }
-    | { type: "adopt"; agent: string; key: string }
+    | { type: "adopt"; agents: string[]; key: string; expected?: Connection }
+    | { type: "remove_discovered"; key: string; targets: { agent: string; revision: string }[] }
     | { type: "settings"; theme: string; locale: string }
     | { type: "text_size"; size: TextSize }
     | { type: "agent_order"; ids: string[] }

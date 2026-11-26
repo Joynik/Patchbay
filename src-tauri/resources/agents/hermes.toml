@@ -1,0 +1,11 @@
+id = "hermes"
+name = "Hermes Agent"
+adapter = "hermes"
+
+[[paths.macos]]
+root = "$ENV:HERMES_HOME"
+folder = "."
+
+[[paths.macos]]
+root = "$HOME"
+folder = ".hermes"

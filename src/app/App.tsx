@@ -1,15 +1,7 @@
-import {
-    LayoutDashboard,
-    LibraryBig,
-    PlugZap,
-    RefreshCw,
-    Settings2,
-    Waypoints,
-} from "lucide-react";
+import { LayoutDashboard, LibraryBig, RefreshCw, Settings2, Waypoints } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { labels } from "../i18n";
-import { Agents } from "../pages/Agents";
 import { Dashboard } from "../pages/Dashboard";
 import { Library } from "../pages/Library";
 import { Settings } from "../pages/Settings";
@@ -18,7 +10,6 @@ import { type Action, change, load, type Snapshot } from "./api";
 const pages = {
     dashboard: LayoutDashboard,
     library: LibraryBig,
-    agents: PlugZap,
     settings: Settings2,
 };
 type Page = keyof typeof pages;
@@ -65,7 +56,7 @@ export function App() {
     }, []);
     useEffect(() => {
         document.documentElement.dataset.theme = data?.theme ?? "dark";
-        document.documentElement.dataset.textSize = data?.text_size ?? "default";
+        document.documentElement.dataset.textSize = data?.text_size ?? "small";
         document.documentElement.lang = data?.locale ?? "en";
     }, [data?.theme, data?.locale, data?.text_size]);
 
@@ -130,9 +121,6 @@ export function App() {
                 {data && page === "dashboard" && <Dashboard data={data} t={t} />}
                 {data && page === "library" && (
                     <Library data={data} t={t} act={perform} busy={busy} />
-                )}
-                {data && page === "agents" && (
-                    <Agents data={data} t={t} act={perform} busy={busy} />
                 )}
                 {data && page === "settings" && (
                     <Settings data={data} t={t} act={perform} busy={busy} />
