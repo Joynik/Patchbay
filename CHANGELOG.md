@@ -2,8 +2,11 @@
 
 ## Unreleased
 
+## 0.3.0 — 2026-11-26
+
 ### Added
 
+- Install and upgrade Patchbay on Apple Silicon and Intel Macs with Homebrew.
 - Stop managing a library server while leaving its agent configurations intact.
 - Remove discovered MCP entries across agents after confirmation.
 - Compare conflicting discovered MCP connections and choose which one to manage.
